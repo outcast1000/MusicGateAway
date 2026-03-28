@@ -72,4 +72,7 @@ pub struct DownloadResponse {
 pub struct IdentityResponse {
     pub name: String,
     pub version: String,
+    pub api: String,
+    pub ui: String,
+    pub bin: String,
 }

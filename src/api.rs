@@ -1,13 +1,19 @@
-use axum::extract::{Path, Query};
+use axum::extract::{Path, Query, State};
 use axum::response::{Json, IntoResponse, Response};
 use axum::response::sse::{Event, Sse};
 use serde::Deserialize;
 use std::convert::Infallible;
+use std::sync::Arc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::tidal::TidalClient;
 use crate::types::*;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub base_url: Arc<String>,
+}
 
 fn client() -> TidalClient {
     TidalClient::new(None)
@@ -45,10 +51,16 @@ fn artist_to_search(a: crate::tidal::TidalArtistInfo) -> TidalSearchArtist {
     }
 }
 
-pub async fn identity() -> Json<IdentityResponse> {
+pub async fn identity(State(state): State<AppState>) -> Json<IdentityResponse> {
+    let bin = std::env::current_exe()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
     Json(IdentityResponse {
         name: "MusicGateAway".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
+        api: format!("{}/", state.base_url),
+        ui: format!("{}/ui/", state.base_url),
+        bin,
     })
 }
 

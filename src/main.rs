@@ -71,6 +71,11 @@ async fn main() {
         .allow_methods([Method::GET])
         .allow_headers([header::CONTENT_TYPE]);
 
+    let addr = format!("{}:{}", args.bind, args.port);
+    let state = api::AppState {
+        base_url: std::sync::Arc::new(format!("http://{}", addr)),
+    };
+
     let app = Router::new()
         .route("/", get(api::identity))
         .route("/search/", get(api::search))
@@ -87,9 +92,8 @@ async fn main() {
         .route("/ui", get(|| async { Redirect::permanent("/ui/") }))
         .route("/ui/", get(serve_ui_root))
         .route("/ui/{*path}", get(serve_frontend))
-        .layer(cors);
-
-    let addr = format!("{}:{}", args.bind, args.port);
+        .layer(cors)
+        .with_state(state);
     println!(
         "MusicGateAway v{} listening on http://{}",
         env!("CARGO_PKG_VERSION"),
