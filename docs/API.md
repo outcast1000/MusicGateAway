@@ -10,14 +10,25 @@ All endpoints return JSON. No authentication required.
 
 ### `GET /`
 
-Returns server name and version.
+Returns server name, version, API/UI URLs, and executable path.
 
 ```json
 {
   "name": "MusicGateAway",
-  "version": "0.1.0"
+  "version": "1.0.0",
+  "api": "http://127.0.0.1:7171/",
+  "ui": "http://127.0.0.1:7171/ui/",
+  "bin": "/usr/local/bin/music-gate-away"
 }
 ```
+
+| Field | Description |
+|-------|-------------|
+| `name` | Application name |
+| `version` | Semantic version |
+| `api` | Base URL for the API |
+| `ui` | URL for the web UI |
+| `bin` | Absolute path to the running executable |
 
 ---
 
@@ -135,8 +146,8 @@ Download a track to the server filesystem. The file is tagged with metadata (tit
 
 ```json
 {
-  "path": "/tmp/downloads/Radiohead - Creep.flac",
-  "filename": "Radiohead - Creep.flac",
+  "path": "/tmp/downloads/Radiohead - Pablo Honey - 02 - Creep.flac",
+  "filename": "Radiohead - Pablo Honey - 02 - Creep.flac",
   "bytes": 28456789,
   "mime_type": "audio/flac"
 }
@@ -154,7 +165,7 @@ data: {"stage":"downloading","bytes":1048576,"total":28456789,"percent":3}
 ...
 data: {"stage":"downloading","bytes":28456789,"total":28456789,"percent":100}
 data: {"stage":"tagging","message":"Writing metadata..."}
-data: {"stage":"done","path":"/tmp/downloads/Radiohead - Creep.flac","filename":"Radiohead - Creep.flac","bytes":28456789}
+data: {"stage":"done","path":"/tmp/downloads/Radiohead - Pablo Honey - 02 - Creep.flac","filename":"Radiohead - Pablo Honey - 02 - Creep.flac","bytes":28456789}
 ```
 
 On error: `data: {"stage":"error","message":"..."}`

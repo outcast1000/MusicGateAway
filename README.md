@@ -56,6 +56,7 @@ See [docs/API.md](docs/API.md) for the full API reference.
 
 | Endpoint | Description |
 |----------|-------------|
+| `GET /` | Server identity, version, URLs, binary path |
 | `GET /search/?s=query` | Combined search (tracks, albums, artists) |
 | `GET /tracks/{id}/stream-url` | Get direct stream URL |
 | `GET /tracks/{id}/download?dest=/path` | Download with metadata tagging |
