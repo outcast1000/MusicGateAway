@@ -172,7 +172,7 @@ function renderSearchResults(res) {
 
   if (mode === "tracks") {
     if (!hasTracks) { content.innerHTML = `<div class="empty-state">No tracks found</div>`; return; }
-    let html = `<div class="section"><h3>Tracks</h3><div class="track-list">`;
+    let html = `<div class="section"><h3>Tracks</h3>${trackToolbar()}<div class="track-list">`;
     for (const t of res.tracks) html += trackRow(t);
     html += `</div></div>`;
     content.innerHTML = html;
@@ -208,6 +208,7 @@ function renderSearchResults(res) {
 
   html += `<div class="search-col"><h3>Tracks</h3>`;
   if (hasTracks) {
+    html += trackToolbar();
     html += `<div class="track-list">`;
     for (const t of res.tracks) html += trackRow(t);
     html += `</div>`;
@@ -239,6 +240,18 @@ function renderSearchResults(res) {
   html += `</div>`;
   content.innerHTML = html;
   bindTrackActions();
+}
+
+function trackToolbar() {
+  return `<div class="track-toolbar">
+    <button class="btn btn-sel-action" data-tb-all>All</button>
+    <button class="btn btn-sel-action" data-tb-none>None</button>
+    <span class="sel-count" data-tb-count>0 selected</span>
+    <div class="sel-spacer"></div>
+    <button class="btn btn-sel-action" data-tb-play disabled>&#9654; Play Tracks</button>
+    <button class="btn btn-sel-action" data-tb-enqueue disabled>+ Queue</button>
+    <button class="btn btn-sel-action" data-tb-download disabled>&#8681; Download Tracks</button>
+  </div>`;
 }
 
 function trackRow(t, showArt = true) {
@@ -363,7 +376,7 @@ content.addEventListener("click", (e) => {
 });
 
 function bindTrackActions() {
-  updateSelectionBar();
+  updateTrackToolbar();
 }
 
 async function loadAlbum(albumId) {
@@ -409,6 +422,7 @@ function renderAlbumDetail(album) {
           <button class="btn btn-play-all" data-action-dl-album>&#8681; Download Album</button>
         </div>
       </div>
+      ${trackToolbar()}
       <div class="track-list">`;
 
   for (const t of (album.tracks || [])) {
@@ -417,7 +431,7 @@ function renderAlbumDetail(album) {
 
   html += `</div></div>`;
   content.innerHTML = html;
-  updateSelectionBar();
+  updateTrackToolbar();
 }
 
 function renderArtistDetail(artist) {
@@ -441,18 +455,10 @@ function renderArtistDetail(artist) {
 
   html += `</div></div>`;
   content.innerHTML = html;
-  updateSelectionBar();
+  updateTrackToolbar();
 }
 
-// --- Selection ---
-
-const selectionBar = $("#selectionBar");
-const selCount = $("#selCount");
-const selAll = $("#selAll");
-const selNone = $("#selNone");
-const selPlay = $("#selPlay");
-const selEnqueue = $("#selEnqueue");
-const selDownload = $("#selDownload");
+// --- Selection / Track toolbar ---
 
 function getCheckedTracks() {
   return Array.from(content.querySelectorAll(".track-check:checked")).map(cb => {
@@ -461,67 +467,80 @@ function getCheckedTracks() {
   });
 }
 
-function updateSelectionBar() {
+function updateTrackToolbar() {
   const all = content.querySelectorAll(".track-check");
   const checked = content.querySelectorAll(".track-check:checked");
-  if (all.length > 0) {
-    selectionBar.style.display = "flex";
-    selCount.textContent = `${checked.length} / ${all.length} selected`;
-  } else {
-    selectionBar.style.display = "none";
-  }
   const hasSelection = checked.length > 0;
-  const playBtn = content.querySelector("[data-action-play-album]");
-  const dlBtn = content.querySelector("[data-action-dl-album]");
-  if (playBtn) playBtn.innerHTML = hasSelection ? "&#9654; Play Tracks" : "&#9654; Play Album";
-  if (dlBtn) dlBtn.innerHTML = hasSelection ? "&#8681; Download Tracks" : "&#8681; Download Album";
+  content.querySelectorAll("[data-tb-count]").forEach(el => {
+    el.textContent = `${checked.length} / ${all.length} selected`;
+  });
+  content.querySelectorAll("[data-tb-play]").forEach(el => el.disabled = !hasSelection);
+  content.querySelectorAll("[data-tb-enqueue]").forEach(el => el.disabled = !hasSelection);
+  content.querySelectorAll("[data-tb-download]").forEach(el => el.disabled = !hasSelection);
+  // Update album detail buttons
+  const playAlbumBtn = content.querySelector("[data-action-play-album]");
+  const dlAlbumBtn = content.querySelector("[data-action-dl-album]");
+  if (playAlbumBtn) playAlbumBtn.innerHTML = hasSelection ? "&#9654; Play Tracks" : "&#9654; Play Album";
+  if (dlAlbumBtn) dlAlbumBtn.innerHTML = hasSelection ? "&#8681; Download Tracks" : "&#8681; Download Album";
 }
 
 content.addEventListener("change", (e) => {
   if (e.target.classList.contains("track-check")) {
-    updateSelectionBar();
+    updateTrackToolbar();
   }
 });
 
-selAll.addEventListener("click", () => {
-  content.querySelectorAll(".track-check").forEach(cb => cb.checked = true);
-  updateSelectionBar();
-});
-
-selNone.addEventListener("click", () => {
-  content.querySelectorAll(".track-check").forEach(cb => cb.checked = false);
-  updateSelectionBar();
-});
-
-selPlay.addEventListener("click", () => {
-  const tracks = getCheckedTracks();
-  if (tracks.length === 0) return;
-  queue = tracks;
-  queueIndex = 0;
-  startPlayback(tracks[0]);
-  renderPlaylist();
-});
-
-selEnqueue.addEventListener("click", () => {
-  const tracks = getCheckedTracks();
-  queue.push(...tracks);
-});
-
-selDownload.addEventListener("click", async () => {
-  const tracks = getCheckedTracks();
-  if (tracks.length === 0) return;
-  selDownload.disabled = true;
-  selDownload.textContent = "Downloading...";
-  for (let i = 0; i < tracks.length; i++) {
-    try {
-      await downloadTrackWithProgress(tracks[i], i + 1, tracks.length);
-    } catch (e) {
-      console.error(`Download failed for ${tracks[i].title}:`, e);
-    }
+content.addEventListener("click", (e) => {
+  const tb = e.target.closest("[data-tb-all]");
+  if (tb) {
+    content.querySelectorAll(".track-check").forEach(cb => cb.checked = true);
+    updateTrackToolbar();
+    return;
   }
-  dlProgress.style.display = "none";
-  selDownload.disabled = false;
-  selDownload.innerHTML = "&#8681; Download";
+  const tbNone = e.target.closest("[data-tb-none]");
+  if (tbNone) {
+    content.querySelectorAll(".track-check").forEach(cb => cb.checked = false);
+    updateTrackToolbar();
+    return;
+  }
+  const tbPlay = e.target.closest("[data-tb-play]");
+  if (tbPlay) {
+    const tracks = getCheckedTracks();
+    if (tracks.length === 0) return;
+    queue = tracks;
+    queueIndex = 0;
+    startPlayback(tracks[0]);
+    renderPlaylist();
+    return;
+  }
+  const tbEnqueue = e.target.closest("[data-tb-enqueue]");
+  if (tbEnqueue) {
+    const tracks = getCheckedTracks();
+    if (tracks.length === 0) return;
+    queue.push(...tracks);
+    renderPlaylist();
+    return;
+  }
+  const tbDl = e.target.closest("[data-tb-download]");
+  if (tbDl) {
+    const tracks = getCheckedTracks();
+    if (tracks.length === 0) return;
+    tbDl.disabled = true;
+    tbDl.textContent = "Downloading...";
+    (async () => {
+      for (let i = 0; i < tracks.length; i++) {
+        try {
+          await downloadTrackWithProgress(tracks[i], i + 1, tracks.length);
+        } catch (e) {
+          console.error(`Download failed for ${tracks[i].title}:`, e);
+        }
+      }
+      dlProgress.style.display = "none";
+      tbDl.disabled = false;
+      tbDl.innerHTML = "&#8681; Download Tracks";
+    })();
+    return;
+  }
 });
 
 // --- Playlist panel ---

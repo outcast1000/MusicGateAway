@@ -593,24 +593,24 @@ body::before {
 .track-row-album { padding-left: 0; }
 
 /* ===== Selection Bar ===== */
-.selection-bar {
+.track-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 20px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-  flex-shrink: 0;
+  gap: 8px;
+  padding: 6px 0;
+  margin-bottom: 4px;
 }
-
-.sel-count {
+.track-toolbar .sel-count {
   font-size: 12px;
   font-weight: 500;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
-
-.sel-spacer { flex: 1; }
+.track-toolbar .sel-spacer { flex: 1; }
+.track-toolbar .btn-sel-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 
 .btn-sel-action {
   padding: 6px 14px;
