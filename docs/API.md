@@ -32,6 +32,20 @@ Returns server name, version, API/UI URLs, and executable path.
 
 ---
 
+## Shutdown
+
+### `GET /shutdown`
+
+Gracefully shuts down the server. In-flight requests are completed before the process exits.
+
+```json
+{
+  "status": "shutting down"
+}
+```
+
+---
+
 ## Search
 
 ### `GET /search/`

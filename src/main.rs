@@ -72,12 +72,15 @@ async fn main() {
         .allow_headers([header::CONTENT_TYPE]);
 
     let addr = format!("{}:{}", args.bind, args.port);
+    let shutdown = std::sync::Arc::new(tokio::sync::Notify::new());
     let state = api::AppState {
         base_url: std::sync::Arc::new(format!("http://{}", addr)),
+        shutdown: shutdown.clone(),
     };
 
     let app = Router::new()
         .route("/", get(api::identity))
+        .route("/shutdown", get(api::shutdown))
         .route("/search/", get(api::search))
         .route("/tracks", get(api::tracks_search))
         .route("/tracks/{id}", get(api::tracks_get))
@@ -110,5 +113,9 @@ async fn main() {
     }
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move { shutdown.notified().await })
+        .await
+        .unwrap();
+    println!("Shutdown complete.");
 }

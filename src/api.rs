@@ -13,6 +13,7 @@ use crate::types::*;
 #[derive(Clone)]
 pub struct AppState {
     pub base_url: Arc<String>,
+    pub shutdown: Arc<tokio::sync::Notify>,
 }
 
 fn client() -> TidalClient {
@@ -62,6 +63,11 @@ pub async fn identity(State(state): State<AppState>) -> Json<IdentityResponse> {
         ui: format!("{}/ui/", state.base_url),
         bin,
     })
+}
+
+pub async fn shutdown(State(state): State<AppState>) -> Json<serde_json::Value> {
+    state.shutdown.notify_one();
+    Json(serde_json::json!({ "status": "shutting down" }))
 }
 
 // --- Search (combined) ---
