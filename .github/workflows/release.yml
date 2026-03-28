@@ -81,22 +81,24 @@ jobs:
 
       - name: Get version
         id: version
-        shell: bash
-        run: echo "version=$(cargo metadata --format-version=1 --no-deps | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"packages\"][0][\"version\"])')" >> "$GITHUB_OUTPUT"
+        shell: pwsh
+        run: |
+          $meta = cargo metadata --format-version=1 --no-deps | ConvertFrom-Json
+          $ver = $meta.packages[0].version
+          echo "version=$ver" >> $env:GITHUB_OUTPUT
 
       - name: Create Setup installer
-        shell: bash
+        shell: pwsh
         run: |
-          iscc //DMyAppVersion="${{ steps.version.outputs.version }}" \
-               //DBinDir="$(pwd)/target/x86_64-pc-windows-msvc/release" \
-               installer/windows.iss
+          $binDir = "${{ github.workspace }}\target\x86_64-pc-windows-msvc\release"
+          iscc /DMyAppVersion="${{ steps.version.outputs.version }}" /DBinDir="$binDir" installer\windows.iss
 
       - name: Create portable archive
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p dist
-          cp target/x86_64-pc-windows-msvc/release/music-gate-away.exe dist/
-          cd dist && 7z a ../MusicGateAway-${{ steps.version.outputs.version }}-Windows-x86_64.zip music-gate-away.exe
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item target\x86_64-pc-windows-msvc\release\music-gate-away.exe dist\
+          cd dist; 7z a ..\MusicGateAway-${{ steps.version.outputs.version }}-Windows-x86_64.zip music-gate-away.exe
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
