@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MusicGateAway</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 36'><path d='M4 34V13C4 6.4 9.4 2 16 2s12 4.4 12 11v21' stroke='%23d4943a' stroke-width='2.5' stroke-linecap='round' fill='none'/><rect x='10.5' y='16' width='2.5' height='11' rx='1.25' fill='%23d4943a'/><rect x='14.75' y='12' width='2.5' height='15' rx='1.25' fill='%23d4943a'/><rect x='19' y='18' width='2.5' height='9' rx='1.25' fill='%23d4943a'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-deep: #0a0a0c;
+      --bg: #111114;
+      --bg-elevated: #19191e;
+      --bg-hover: #222228;
+      --border: #2a2a32;
+      --text: #e8e6e1;
+      --text-secondary: #a8a5a0;
+      --text-tertiary: #6a6862;
+      --accent: #d4943a;
+      --accent-dim: #b07828;
+      --accent-glow: rgba(212, 148, 58, 0.15);
+      --font-display: 'Syne', sans-serif;
+      --font-body: 'Outfit', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-deep);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(212,148,58,0.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* --- Noise texture --- */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      opacity: 0.025;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 256px 256px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--text); }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* --- Hero --- */
+    .hero {
+      text-align: center;
+      padding: 100px 0 60px;
+    }
+
+    .hero-logo {
+      width: 80px;
+      height: 90px;
+      color: var(--accent);
+      margin-bottom: 28px;
+      filter: drop-shadow(0 0 30px rgba(212,148,58,0.3));
+      animation: fadeInUp 0.6s ease both;
+    }
+
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: 3.2rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 8px;
+      animation: fadeInUp 0.6s ease 0.1s both;
+    }
+
+    .hero h1 strong {
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .hero .tagline {
+      font-size: 1.15rem;
+      color: var(--text-secondary);
+      font-weight: 300;
+      max-width: 480px;
+      margin: 0 auto 40px;
+      animation: fadeInUp 0.6s ease 0.2s both;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+      animation: fadeInUp 0.6s ease 0.3s both;
+    }
+
+    /* --- Version badge --- */
+    .version-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 8px 18px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+      animation: fadeInUp 0.6s ease 0.05s both;
+    }
+
+    .version-badge .ver {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .version-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #3aba5a;
+      box-shadow: 0 0 6px #3aba5a88;
+    }
+
+    /* --- Buttons --- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0a0a0c;
+    }
+    .btn-primary:hover {
+      background: #e0a548;
+      color: #0a0a0c;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(212,148,58,0.3);
+    }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+      transform: translateY(-1px);
+      color: var(--text);
+    }
+
+    .btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* --- Features --- */
+    .features {
+      padding: 60px 0;
+    }
+
+    .features h2 {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .feature-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 24px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .feature-card:hover {
+      border-color: var(--accent-dim);
+      transform: translateY(-2px);
+    }
+
+    .feature-card .icon {
+      font-size: 1.6rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .feature-card h3 {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* --- Downloads --- */
+    .downloads {
+      padding: 60px 0 80px;
+    }
+
+    .downloads h2 {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .downloads .sub {
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin-bottom: 36px;
+    }
+
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .dl-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .dl-card .dl-os {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .dl-card .dl-os svg {
+      width: 32px;
+      height: 32px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    .dl-card .dl-os-info h3 {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .dl-card .dl-os-info p {
+      font-size: 0.8rem;
+      color: var(--text-tertiary);
+    }
+
+    .dl-links {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .dl-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: var(--text);
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+
+    .dl-link:hover {
+      border-color: var(--accent-dim);
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    .dl-link .dl-label {
+      font-weight: 500;
+    }
+
+    .dl-link .dl-size {
+      color: var(--text-tertiary);
+      font-size: 0.78rem;
+    }
+
+    .dl-empty {
+      color: var(--text-tertiary);
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 12px;
+    }
+
+    /* --- Footer --- */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 0;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--text-tertiary);
+    }
+
+    footer a { color: var(--text-secondary); }
+    footer a:hover { color: var(--accent); }
+
+    /* --- Spinner --- */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    /* --- Animations --- */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* --- Responsive --- */
+    @media (max-width: 768px) {
+      .hero { padding: 60px 0 40px; }
+      .hero h1 { font-size: 2.2rem; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .download-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 { font-size: 1.8rem; }
+      .hero-actions { flex-direction: column; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <svg class="hero-logo" viewBox="0 0 32 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 34V13C4 6.4 9.4 2 16 2s12 4.4 12 11v21" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        <rect x="10.5" y="16" width="2.5" height="11" rx="1.25" fill="currentColor"/>
+        <rect x="14.75" y="12" width="2.5" height="15" rx="1.25" fill="currentColor"/>
+        <rect x="19" y="18" width="2.5" height="9" rx="1.25" fill="currentColor"/>
+      </svg>
+      <div class="version-badge">
+        <span class="dot"></span>
+        <span>Latest: <span class="ver" id="versionTag">loading...</span></span>
+      </div>
+      <h1>Music<strong>Gate</strong>Away</h1>
+      <p class="tagline">A lightweight TIDAL proxy with a built-in web UI. Search, stream, and download music in lossless quality.</p>
+      <div class="hero-actions">
+        <a href="#downloads" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </a>
+        <a href="https://github.com/outcast1000/MusicGateAway" class="btn btn-secondary" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </section>
+
+    <section class="features">
+      <h2>What it does</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <span class="icon">&#127911;</span>
+          <h3>Lossless Streaming</h3>
+          <p>Stream FLAC (16-bit/44.1kHz) or high-quality AAC directly in your browser.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">&#128269;</span>
+          <h3>Search Everything</h3>
+          <p>Find tracks, albums, and artists from TIDAL's full catalog with instant results.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">&#128229;</span>
+          <h3>Download & Tag</h3>
+          <p>Download tracks with full metadata: title, artist, album, track number, and cover art.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">&#127899;</span>
+          <h3>Built-in Web UI</h3>
+          <p>No separate frontend setup. The UI is embedded in the single binary and served automatically.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">&#9889;</span>
+          <h3>Single Binary</h3>
+          <p>Written in Rust with Axum. One executable, no runtime dependencies. Just run it.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">&#128268;</span>
+          <h3>REST API</h3>
+          <p>Full JSON API for search, metadata, streaming, and downloads. Build your own tools on top.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="downloads" id="downloads">
+      <h2>Downloads</h2>
+      <p class="sub" id="releaseInfo">Fetching latest release...</p>
+      <div class="download-grid" id="downloadGrid">
+        <div class="dl-card">
+          <div class="dl-os">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            <div class="dl-os-info">
+              <h3>macOS</h3>
+              <p>Intel &amp; Apple Silicon</p>
+            </div>
+          </div>
+          <div class="dl-links" id="macLinks"><div class="dl-empty"><span class="spinner"></span></div></div>
+        </div>
+        <div class="dl-card">
+          <div class="dl-os">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+            <div class="dl-os-info">
+              <h3>Windows</h3>
+              <p>x86_64</p>
+            </div>
+          </div>
+          <div class="dl-links" id="winLinks"><div class="dl-empty"><span class="spinner"></span></div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div class="container">
+      MusicGateAway &mdash; <a href="https://github.com/outcast1000/MusicGateAway" target="_blank" rel="noopener">Source on GitHub</a>
+    </div>
+  </footer>
+
+  <script>
+    const REPO = 'outcast1000/MusicGateAway';
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function classifyAsset(name) {
+      const n = name.toLowerCase();
+      if (n.includes('macos') || n.includes('darwin')) {
+        if (n.includes('aarch64') || n.includes('arm64')) return { os: 'mac', arch: 'Apple Silicon' };
+        if (n.includes('x86_64') || n.includes('intel')) return { os: 'mac', arch: 'Intel' };
+        return { os: 'mac', arch: '' };
+      }
+      if (n.includes('windows') || n.includes('win')) {
+        return { os: 'win', arch: 'x86_64' };
+      }
+      return null;
+    }
+
+    function labelForAsset(name) {
+      const n = name.toLowerCase();
+      if (n.endsWith('.pkg')) return 'Installer (.pkg)';
+      if (n.endsWith('.dmg')) return 'Disk Image (.dmg)';
+      if (n.endsWith('.tar.gz') || n.endsWith('.tgz')) return 'Portable (.tar.gz)';
+      if (n.endsWith('.zip')) return 'Portable (.zip)';
+      if (n.includes('setup') && n.endsWith('.exe')) return 'Setup Installer (.exe)';
+      if (n.endsWith('.msi')) return 'Installer (.msi)';
+      if (n.endsWith('.exe')) return 'Executable (.exe)';
+      return name;
+    }
+
+    async function loadRelease() {
+      const versionEl = document.getElementById('versionTag');
+      const infoEl = document.getElementById('releaseInfo');
+      const macLinksEl = document.getElementById('macLinks');
+      const winLinksEl = document.getElementById('winLinks');
+
+      try {
+        const resp = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const release = await resp.json();
+
+        versionEl.textContent = release.tag_name;
+        const date = new Date(release.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        infoEl.innerHTML = `${release.tag_name} &mdash; released ${date}`;
+
+        const macAssets = [];
+        const winAssets = [];
+
+        for (const asset of release.assets) {
+          const cls = classifyAsset(asset.name);
+          if (!cls) continue;
+          const entry = {
+            name: asset.name,
+            url: asset.browser_download_url,
+            size: asset.size,
+            label: labelForAsset(asset.name),
+            arch: cls.arch
+          };
+          if (cls.os === 'mac') macAssets.push(entry);
+          else if (cls.os === 'win') winAssets.push(entry);
+        }
+
+        function renderLinks(assets) {
+          if (assets.length === 0) return '<div class="dl-empty">No assets available yet</div>';
+          return assets.map(a => `
+            <a href="${a.url}" class="dl-link">
+              <span class="dl-label">${a.label}${a.arch ? ' &mdash; ' + a.arch : ''}</span>
+              <span class="dl-size">${formatBytes(a.size)}</span>
+            </a>
+          `).join('');
+        }
+
+        macLinksEl.innerHTML = renderLinks(macAssets);
+        winLinksEl.innerHTML = renderLinks(winAssets);
+
+      } catch (e) {
+        console.error('Failed to fetch release:', e);
+        versionEl.textContent = '...';
+        infoEl.textContent = 'No releases published yet';
+        macLinksEl.innerHTML = '<div class="dl-empty">No releases yet</div>';
+        winLinksEl.innerHTML = '<div class="dl-empty">No releases yet</div>';
+      }
+    }
+
+    loadRelease();
+  </script>
+</body>
+</html>
