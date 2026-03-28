@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MusicGateAway</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <h1 class="app-title">MusicGateAway</h1>
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search tracks, albums, artists..." autofocus>
+      </div>
+    </header>
+    <main id="content" class="content">
+      <div class="empty-state">Type in the search bar to search TIDAL</div>
+    </main>
+    <footer id="nowPlaying" class="now-playing" style="display:none">
+      <div class="now-playing-info">
+        <img id="npArt" class="now-playing-art" src="" alt="">
+        <div class="now-playing-text">
+          <span id="npTitle" class="now-playing-title"></span>
+          <span id="npArtist" class="now-playing-artist"></span>
+        </div>
+      </div>
+      <div class="now-playing-controls">
+        <button id="npPrev" class="np-btn" title="Previous">&#9664;&#9664;</button>
+        <button id="npPlayPause" class="np-btn np-btn-play" title="Play/Pause">&#9654;</button>
+        <button id="npNext" class="np-btn" title="Next">&#9654;&#9654;</button>
+      </div>
+      <div class="now-playing-seek">
+        <span id="npTime" class="np-time">0:00</span>
+        <input type="range" id="npSeek" class="np-seek" min="0" max="100" value="0">
+        <span id="npDuration" class="np-duration">0:00</span>
+      </div>
+    </footer>
+  </div>
+  <audio id="audioEl" preload="auto"></audio>
+  <script src="app.js"></script>
+</body>
+</html>
