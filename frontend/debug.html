@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MusicGateAway — Debug</title>
+  <style>
+    :root { --bg: #1a1a2e; --bg-surface: #252540; --border: rgba(255,255,255,0.1); --text: #e0e0e0; --text-sec: #888; --accent: #53a8ff; --ok: #4caf50; --err: #ef5350; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+    h1 { font-size: 18px; color: var(--accent); margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: var(--text-sec); margin-bottom: 24px; }
+    .subtitle a { color: var(--accent); text-decoration: none; }
+    .subtitle a:hover { text-decoration: underline; }
+    .endpoints { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
+    .endpoint { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .ep-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .ep-method { background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+    .ep-path { font-size: 14px; font-family: monospace; }
+    .ep-desc { font-size: 12px; color: var(--text-sec); margin-bottom: 10px; }
+    .ep-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+    .ep-field { display: flex; flex-direction: column; gap: 2px; }
+    .ep-field label { font-size: 11px; color: var(--text-sec); }
+    .ep-field input, .ep-field select { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; color: var(--text); font-size: 13px; width: 180px; }
+    .ep-field input:focus, .ep-field select:focus { border-color: var(--accent); outline: none; }
+    .ep-btn { background: var(--accent); color: #fff; border: none; border-radius: 4px; padding: 7px 16px; font-size: 13px; cursor: pointer; align-self: flex-end; }
+    .ep-btn:hover { opacity: 0.85; }
+    .ep-btn:disabled { opacity: 0.5; cursor: default; }
+    .ep-result { margin-top: 10px; }
+    .ep-status { font-size: 12px; margin-bottom: 4px; }
+    .ep-status.ok { color: var(--ok); }
+    .ep-status.err { color: var(--err); }
+    .ep-output { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 10px; font-family: monospace; font-size: 12px; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+    .ep-time { font-size: 11px; color: var(--text-sec); margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <h1>MusicGateAway Debug</h1>
+  <p class="subtitle"><a href="/ui/">&larr; Back to UI</a></p>
+  <div class="endpoints" id="endpoints"></div>
+
+  <script>
+    const endpoints = [
+      { method: "GET", path: "/", desc: "Identity — returns name and version", fields: [] },
+      { method: "GET", path: "/search/", desc: "Search tracks (s=), albums (al=), or artists (a=)", fields: [
+        { name: "_type", label: "Search type", type: "select", options: ["Tracks (s)", "Albums (al)", "Artists (a)"], value: "Tracks (s)" },
+        { name: "_query", label: "Query", placeholder: "e.g. red hot chili" },
+        { name: "limit", label: "Limit", placeholder: "25", value: "25" },
+        { name: "offset", label: "Offset", placeholder: "0", value: "0" },
+      ]},
+      { method: "GET", path: "/tracks", desc: "Search tracks", fields: [
+        { name: "s", label: "Query", placeholder: "e.g. red hot chili" },
+        { name: "limit", label: "Limit", placeholder: "25", value: "25" },
+        { name: "offset", label: "Offset", placeholder: "0", value: "0" },
+      ]},
+      { method: "GET", path: "/tracks/{id}", desc: "Track metadata by ID", pathParam: true, fields: [
+        { name: "_id", label: "Track ID", placeholder: "e.g. 304849" },
+      ]},
+      { method: "GET", path: "/tracks/{id}/stream-url", desc: "Get stream URL for a track", pathParam: true, fields: [
+        { name: "_id", label: "Track ID", placeholder: "e.g. 304849" },
+        { name: "quality", label: "Quality", type: "select", options: ["LOSSLESS", "HIGH"], value: "LOSSLESS" },
+      ]},
+      { method: "GET", path: "/tracks/{id}/stream-data", desc: "Get track stream data (manifest decoded)", pathParam: true, fields: [
+        { name: "_id", label: "Track ID", placeholder: "e.g. 304849" },
+        { name: "quality", label: "Quality", type: "select", options: ["LOSSLESS", "HIGH"], value: "LOSSLESS" },
+      ]},
+      { method: "GET", path: "/albums", desc: "Search albums", fields: [
+        { name: "s", label: "Query", placeholder: "e.g. blood sugar" },
+        { name: "limit", label: "Limit", placeholder: "25", value: "25" },
+        { name: "offset", label: "Offset", placeholder: "0", value: "0" },
+      ]},
+      { method: "GET", path: "/albums/{id}", desc: "Album detail with tracks", pathParam: true, fields: [
+        { name: "_id", label: "Album ID", placeholder: "e.g. 304838" },
+      ]},
+      { method: "GET", path: "/artists", desc: "Search artists", fields: [
+        { name: "s", label: "Query", placeholder: "e.g. red hot chili" },
+        { name: "limit", label: "Limit", placeholder: "25", value: "25" },
+        { name: "offset", label: "Offset", placeholder: "0", value: "0" },
+      ]},
+      { method: "GET", path: "/artists/{id}", desc: "Artist detail with albums", pathParam: true, fields: [
+        { name: "_id", label: "Artist ID", placeholder: "e.g. 13957" },
+      ]},
+      { method: "GET", path: "/tracks/{id}/download", desc: "Download track to server filesystem", pathParam: true, fields: [
+        { name: "_id", label: "Track ID", placeholder: "e.g. 304849" },
+        { name: "dest", label: "Destination path", placeholder: "/tmp/mga-test" },
+        { name: "quality", label: "Quality", type: "select", options: ["LOSSLESS", "HIGH"], value: "LOSSLESS" },
+      ]},
+    ];
+
+    const container = document.getElementById("endpoints");
+
+    endpoints.forEach((ep, i) => {
+      const div = document.createElement("div");
+      div.className = "endpoint";
+      div.innerHTML = `
+        <div class="ep-header">
+          <span class="ep-method">${ep.method}</span>
+          <span class="ep-path">${ep.path}</span>
+        </div>
+        <div class="ep-desc">${ep.desc}</div>
+        <form class="ep-form" data-idx="${i}">
+          ${ep.fields.map(f => {
+            if (f.type === "select") {
+              return `<div class="ep-field"><label>${f.label}</label><select name="${f.name}">${f.options.map(o => `<option value="${o}"${o === f.value ? ' selected' : ''}>${o}</option>`).join('')}</select></div>`;
+            }
+            return `<div class="ep-field"><label>${f.label}</label><input name="${f.name}" placeholder="${f.placeholder || ''}" value="${f.value || ''}"></div>`;
+          }).join('')}
+          <button class="ep-btn" type="submit">Send</button>
+        </form>
+        <div class="ep-result" id="result-${i}"></div>
+      `;
+      container.appendChild(div);
+    });
+
+    document.querySelectorAll(".ep-form").forEach(form => {
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const idx = form.dataset.idx;
+        const ep = endpoints[idx];
+        const resultDiv = document.getElementById(`result-${idx}`);
+        const btn = form.querySelector(".ep-btn");
+
+        const params = new URLSearchParams();
+        ep.fields.forEach(f => {
+          if (f.name.startsWith("_")) return;
+          const val = form.elements[f.name].value.trim();
+          if (val) params.set(f.name, val);
+        });
+
+        // Handle search type mapping
+        if (form.elements["_type"] && form.elements["_query"]) {
+          const typeVal = form.elements["_type"].value;
+          const query = form.elements["_query"].value.trim();
+          if (query) {
+            const key = typeVal.startsWith("Albums") ? "al" : typeVal.startsWith("Artists") ? "a" : "s";
+            params.set(key, query);
+          }
+        }
+
+        // Handle path parameters ({id} substitution)
+        let basePath = ep.path;
+        if (ep.pathParam && form.elements["_id"]) {
+          const idVal = form.elements["_id"].value.trim();
+          basePath = basePath.replace("{id}", encodeURIComponent(idVal));
+        }
+
+        const qs = params.toString();
+        const url = basePath + (qs ? "?" + qs : "");
+
+        btn.disabled = true;
+        btn.textContent = "Loading...";
+        resultDiv.innerHTML = "";
+
+        const t0 = performance.now();
+        try {
+          const resp = await fetch(url);
+          const elapsed = Math.round(performance.now() - t0);
+          const text = await resp.text();
+          let formatted = text;
+          try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+
+          resultDiv.innerHTML = `
+            <div class="ep-status ${resp.ok ? 'ok' : 'err'}">HTTP ${resp.status} ${resp.statusText}</div>
+            <div class="ep-output">${escHtml(formatted)}</div>
+            <div class="ep-time">${elapsed}ms</div>
+          `;
+        } catch (err) {
+          const elapsed = Math.round(performance.now() - t0);
+          resultDiv.innerHTML = `
+            <div class="ep-status err">Network error: ${escHtml(err.message)}</div>
+            <div class="ep-time">${elapsed}ms</div>
+          `;
+        }
+        btn.disabled = false;
+        btn.textContent = "Send";
+      });
+    });
+
+    function escHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

@@ -1,12 +1,16 @@
-use axum::extract::Query;
-use axum::response::Json;
+use axum::extract::{Path, Query};
+use axum::response::{Json, IntoResponse, Response};
+use axum::response::sse::{Event, Sse};
 use serde::Deserialize;
+use std::convert::Infallible;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 
 use crate::tidal::TidalClient;
 use crate::types::*;
 
 fn client() -> TidalClient {
-    TidalClient::new()
+    TidalClient::new(None)
 }
 
 fn track_to_search(t: crate::tidal::TidalTrackInfo) -> TidalSearchTrack {
@@ -48,6 +52,8 @@ pub async fn identity() -> Json<IdentityResponse> {
     })
 }
 
+// --- Search (combined) ---
+
 #[derive(Deserialize)]
 pub struct SearchParams {
     pub s: Option<String>,
@@ -65,7 +71,6 @@ pub async fn search(Query(params): Query<SearchParams>) -> Result<Json<serde_jso
         let c = client();
 
         if let Some(ref q) = params.s {
-            // Track search — also fetch artists and albums
             let tracks = c.search_tracks(q, limit, offset).map_err(|e| e.to_string())?;
             let artists = c.search_artists(q, 5, 0).unwrap_or_default();
             let albums = c.search_albums(q, 5, 0).unwrap_or_default();
@@ -91,34 +96,53 @@ pub async fn search(Query(params): Query<SearchParams>) -> Result<Json<serde_jso
     .map_err(|e| e.to_string())?
 }
 
+// --- Tracks ---
+
 #[derive(Deserialize)]
-pub struct TrackParams {
-    pub id: String,
-    pub quality: Option<String>,
+pub struct TracksSearchParams {
+    pub s: String,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
 }
 
-pub async fn track(Query(params): Query<TrackParams>) -> Result<Json<serde_json::Value>, String> {
+pub async fn tracks_search(
+    Query(params): Query<TracksSearchParams>,
+) -> Result<Json<Vec<TidalSearchTrack>>, String> {
+    let limit = params.limit.unwrap_or(25);
+    let offset = params.offset.unwrap_or(0);
+
     tokio::task::spawn_blocking(move || {
         let c = client();
-        let quality = params.quality.as_deref().unwrap_or("LOSSLESS");
-        // Return raw response for Viboplr compatibility
-        let json = c.get_stream_url(&params.id, quality).map_err(|e| e.to_string())?;
-        Ok(Json(serde_json::json!({
-            "url": json.url,
-            "mime_type": json.mime_type,
-        })))
+        let tracks = c.search_tracks(&params.s, limit, offset).map_err(|e| e.to_string())?;
+        Ok(Json(tracks.into_iter().map(track_to_search).collect()))
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-pub async fn stream_url(
-    Query(params): Query<TrackParams>,
+pub async fn tracks_get(Path(id): Path<String>) -> Result<Json<TidalSearchTrack>, String> {
+    tokio::task::spawn_blocking(move || {
+        let c = client();
+        let track = c.get_track_info(&id).map_err(|e| e.to_string())?;
+        Ok(Json(track_to_search(track)))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(Deserialize)]
+pub struct StreamParams {
+    pub quality: Option<String>,
+}
+
+pub async fn tracks_stream_url(
+    Path(id): Path<String>,
+    Query(params): Query<StreamParams>,
 ) -> Result<Json<StreamUrlResponse>, String> {
     tokio::task::spawn_blocking(move || {
         let c = client();
         let quality = params.quality.as_deref().unwrap_or("LOSSLESS");
-        let info = c.get_stream_url(&params.id, quality).map_err(|e| e.to_string())?;
+        let info = c.get_stream_url(&id, quality).map_err(|e| e.to_string())?;
         Ok(Json(StreamUrlResponse {
             url: info.url,
             mime_type: info.mime_type,
@@ -128,30 +152,171 @@ pub async fn stream_url(
     .map_err(|e| e.to_string())?
 }
 
-#[derive(Deserialize)]
-pub struct InfoParams {
-    pub id: String,
-}
-
-pub async fn info(Query(params): Query<InfoParams>) -> Result<Json<TidalSearchTrack>, String> {
+pub async fn tracks_stream_data(
+    Path(id): Path<String>,
+    Query(params): Query<StreamParams>,
+) -> Result<Json<serde_json::Value>, String> {
     tokio::task::spawn_blocking(move || {
         let c = client();
-        let track = c.get_track_info(&params.id).map_err(|e| e.to_string())?;
-        Ok(Json(track_to_search(track)))
+        let quality = params.quality.as_deref().unwrap_or("LOSSLESS");
+        let info = c.get_stream_url(&id, quality).map_err(|e| e.to_string())?;
+        Ok(Json(serde_json::json!({
+            "url": info.url,
+            "mime_type": info.mime_type,
+        })))
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
 #[derive(Deserialize)]
-pub struct AlbumParams {
-    pub id: String,
+pub struct DownloadParams {
+    pub dest: String,
+    pub quality: Option<String>,
+    pub progress: Option<String>,
 }
 
-pub async fn album(Query(params): Query<AlbumParams>) -> Result<Json<TidalAlbumDetail>, String> {
+pub async fn tracks_download(
+    Path(id): Path<String>,
+    Query(params): Query<DownloadParams>,
+) -> Response {
+    if params.progress.as_deref() == Some("true") {
+        tracks_download_sse(id, params).into_response()
+    } else {
+        tracks_download_json(id, params).await.into_response()
+    }
+}
+
+async fn tracks_download_json(id: String, params: DownloadParams) -> Response {
+    let result = tokio::task::spawn_blocking(move || {
+        let c = client();
+        let quality = params.quality.as_deref().unwrap_or("LOSSLESS");
+        let dest = std::path::Path::new(&params.dest);
+        c.download_track(&id, quality, dest, None)
+            .map_err(|e| e.to_string())
+    })
+    .await;
+
+    match result {
+        Ok(Ok(r)) => Json(DownloadResponse {
+            path: r.path,
+            filename: r.filename,
+            bytes: r.bytes,
+            mime_type: r.mime_type,
+        })
+        .into_response(),
+        Ok(Err(e)) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
+        Err(e) => {
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+        }
+    }
+}
+
+fn tracks_download_sse(
+    id: String,
+    params: DownloadParams,
+) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
+    let (tx, rx) = tokio::sync::mpsc::channel::<String>(64);
+
     tokio::task::spawn_blocking(move || {
         let c = client();
-        let album = c.get_album(&params.id).map_err(|e| e.to_string())?;
+        let quality = params.quality.as_deref().unwrap_or("LOSSLESS");
+        let dest = std::path::Path::new(&params.dest);
+        if let Err(e) = c.download_track(&id, quality, dest, Some(tx.clone())) {
+            let _ = tx.blocking_send(format!(
+                r#"{{"stage":"error","message":"{}"}}"#,
+                e.to_string().replace('"', "\\\"")
+            ));
+        }
+    });
+
+    let stream = ReceiverStream::new(rx).map(|data| Ok(Event::default().data(data)));
+    Sse::new(stream)
+}
+
+// --- Browse directories ---
+
+#[derive(Deserialize)]
+pub struct BrowseParams {
+    pub path: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+pub struct BrowseResponse {
+    pub current: String,
+    pub parent: Option<String>,
+    pub dirs: Vec<String>,
+}
+
+pub async fn browse_dirs(
+    Query(params): Query<BrowseParams>,
+) -> Result<Json<BrowseResponse>, String> {
+    let base = params
+        .path
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| {
+            dirs::home_dir()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| "/".to_string())
+        });
+
+    let base_path = std::path::Path::new(&base);
+    if !base_path.is_dir() {
+        return Err(format!("Not a directory: {}", base));
+    }
+
+    let parent = base_path.parent().map(|p| p.to_string_lossy().to_string());
+
+    let mut dirs = Vec::new();
+    let entries = std::fs::read_dir(base_path).map_err(|e| e.to_string())?;
+    for entry in entries.flatten() {
+        if let Ok(ft) = entry.file_type() {
+            if ft.is_dir() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if !name.starts_with('.') {
+                        dirs.push(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+    dirs.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+
+    Ok(Json(BrowseResponse {
+        current: base_path.to_string_lossy().to_string(),
+        parent,
+        dirs,
+    }))
+}
+
+// --- Albums ---
+
+#[derive(Deserialize)]
+pub struct AlbumsSearchParams {
+    pub s: String,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+}
+
+pub async fn albums_search(
+    Query(params): Query<AlbumsSearchParams>,
+) -> Result<Json<Vec<TidalSearchAlbum>>, String> {
+    let limit = params.limit.unwrap_or(25);
+    let offset = params.offset.unwrap_or(0);
+
+    tokio::task::spawn_blocking(move || {
+        let c = client();
+        let albums = c.search_albums(&params.s, limit, offset).map_err(|e| e.to_string())?;
+        Ok(Json(albums.into_iter().map(album_to_search).collect()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+pub async fn albums_get(Path(id): Path<String>) -> Result<Json<TidalAlbumDetail>, String> {
+    tokio::task::spawn_blocking(move || {
+        let c = client();
+        let album = c.get_album(&id).map_err(|e| e.to_string())?;
         Ok(Json(TidalAlbumDetail {
             tidal_id: album.id,
             title: album.title,
@@ -165,45 +330,44 @@ pub async fn album(Query(params): Query<AlbumParams>) -> Result<Json<TidalAlbumD
     .map_err(|e| e.to_string())?
 }
 
+
+// --- Artists ---
+
 #[derive(Deserialize)]
-#[allow(dead_code)]
-pub struct ArtistParams {
-    pub id: Option<String>,
-    pub f: Option<String>,
-    pub skip_tracks: Option<String>,
+pub struct ArtistsSearchParams {
+    pub s: String,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
 }
 
-pub async fn artist(
-    Query(params): Query<ArtistParams>,
-) -> Result<Json<serde_json::Value>, String> {
+pub async fn artists_search(
+    Query(params): Query<ArtistsSearchParams>,
+) -> Result<Json<Vec<TidalSearchArtist>>, String> {
+    let limit = params.limit.unwrap_or(25);
+    let offset = params.offset.unwrap_or(0);
+
     tokio::task::spawn_blocking(move || {
         let c = client();
-
-        if let Some(ref artist_id) = params.f {
-            // Artist albums
-            let albums = c.get_artist_albums(artist_id).map_err(|e| e.to_string())?;
-            let artist = c.get_artist(artist_id).map_err(|e| e.to_string())?;
-            let detail = TidalArtistDetail {
-                tidal_id: artist.id,
-                name: artist.name,
-                picture_id: artist.picture_id,
-                albums: albums.into_iter().map(album_to_search).collect(),
-            };
-            Ok(Json(serde_json::to_value(detail).unwrap()))
-        } else if let Some(ref artist_id) = params.id {
-            let artist = c.get_artist(artist_id).map_err(|e| e.to_string())?;
-            let albums = c.get_artist_albums(artist_id).unwrap_or_default();
-            let detail = TidalArtistDetail {
-                tidal_id: artist.id,
-                name: artist.name,
-                picture_id: artist.picture_id,
-                albums: albums.into_iter().map(album_to_search).collect(),
-            };
-            Ok(Json(serde_json::to_value(detail).unwrap()))
-        } else {
-            Err("Missing artist id or f parameter".to_string())
-        }
+        let artists = c.search_artists(&params.s, limit, offset).map_err(|e| e.to_string())?;
+        Ok(Json(artists.into_iter().map(artist_to_search).collect()))
     })
     .await
     .map_err(|e| e.to_string())?
 }
+
+pub async fn artists_get(Path(id): Path<String>) -> Result<Json<TidalArtistDetail>, String> {
+    tokio::task::spawn_blocking(move || {
+        let c = client();
+        let artist = c.get_artist(&id).map_err(|e| e.to_string())?;
+        let albums = c.get_artist_albums(&id).unwrap_or_default();
+        Ok(Json(TidalArtistDetail {
+            tidal_id: artist.id,
+            name: artist.name,
+            picture_id: artist.picture_id,
+            albums: albums.into_iter().map(album_to_search).collect(),
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+

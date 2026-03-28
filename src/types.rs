@@ -61,6 +61,14 @@ pub struct StreamUrlResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadResponse {
+    pub path: String,
+    pub filename: String,
+    pub bytes: u64,
+    pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdentityResponse {
     pub name: String,
     pub version: String,

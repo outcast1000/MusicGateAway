@@ -112,6 +112,7 @@ fn invalidate_instance_cache() {
 // --- TidalClient ---
 
 pub struct TidalClient {
+    override_url: Option<String>,
     client: reqwest::blocking::Client,
 }
 
@@ -144,16 +145,42 @@ pub struct TidalArtistInfo {
 
 pub struct TidalStreamInfo {
     pub url: String,
+    /// MIME type from the manifest, e.g. "audio/flac", "audio/mp4", "audio/mpeg"
     pub mime_type: Option<String>,
 }
 
+pub struct DownloadResult {
+    pub path: String,
+    pub filename: String,
+    pub bytes: u64,
+    pub mime_type: Option<String>,
+}
+
+impl TidalStreamInfo {
+    /// Map the actual TIDAL stream MIME type to a file extension.
+    pub fn extension(&self) -> &'static str {
+        match self.mime_type.as_deref() {
+            Some("audio/flac") => "flac",
+            Some("audio/mpeg") => "mp3",
+            Some("audio/mp4") | Some("audio/m4a") | Some("audio/aac") => "m4a",
+            _ => "flac", // default to flac if unknown
+        }
+    }
+}
+
 impl TidalClient {
-    pub fn new() -> Self {
+    pub fn new(url: Option<&str>) -> Self {
+        let override_url = url
+            .filter(|u| !u.is_empty())
+            .map(|u| u.trim_end_matches('/').to_string());
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
             .build()
             .unwrap_or_else(|_| reqwest::blocking::Client::new());
-        Self { client }
+        Self {
+            override_url,
+            client,
+        }
     }
 
     fn fetch_json(&self, url: &str) -> Result<Value, TidalError> {
@@ -185,10 +212,23 @@ impl TidalClient {
     }
 
     fn get_json(&self, path: &str) -> Result<Value, TidalError> {
-        let instances = get_fallback_urls(&self.client, path, "");
-        if instances.is_empty() {
+        // If user set an override URL, try it first
+        if let Some(ref base) = self.override_url {
+            let url = format!("{}{}", base, path);
+            match self.fetch_json(&url) {
+                Ok(json) => return Ok(json),
+                Err(e) => {
+                    eprintln!("TIDAL: override instance {} failed ({}), trying auto-discovery", base, e);
+                }
+            }
+        }
+
+        // Try instances from the uptime API
+        let exclude = self.override_url.as_deref().unwrap_or("");
+        let instances = get_fallback_urls(&self.client, path, exclude);
+        if instances.is_empty() && self.override_url.is_none() {
             return Err(TidalError(
-                "No TIDAL instances available (uptime API unreachable)".to_string(),
+                "No TIDAL instances available (uptime API unreachable and no override URL set)".to_string(),
             ));
         }
 
@@ -196,16 +236,30 @@ impl TidalClient {
         for instance in &instances {
             let url = format!("{}{}", instance, path);
             match self.fetch_json(&url) {
-                Ok(json) => return Ok(json),
+                Ok(json) => {
+                    eprintln!("TIDAL: succeeded with {}", instance);
+                    return Ok(json);
+                }
                 Err(e) => {
-                    eprintln!("TIDAL: instance {} failed: {}", instance, e);
                     last_err = Some(e);
                 }
             }
         }
 
+        // All instances failed — invalidate cache so next request re-fetches
         invalidate_instance_cache();
-        Err(last_err.unwrap_or_else(|| TidalError("All TIDAL instances failed".to_string())))
+        Err(last_err.unwrap_or_else(|| {
+            TidalError("All TIDAL instances failed".to_string())
+        }))
+    }
+
+    pub fn ping(&self) -> Result<String, TidalError> {
+        let json = self.get_json("/")?;
+        let version = json["version"]
+            .as_str()
+            .unwrap_or("unknown")
+            .to_string();
+        Ok(version)
     }
 
     pub fn search_tracks(
@@ -318,10 +372,188 @@ impl TidalClient {
             })
         } else {
             Err(TidalError(format!(
-                "Unsupported manifest type: {}",
+                "Unsupported manifest type: {}. Only BTS manifests are supported (try LOSSLESS or HIGH quality).",
                 manifest_type
             )))
         }
+    }
+
+    pub fn download_track(
+        &self,
+        id: &str,
+        quality: &str,
+        dest: &std::path::Path,
+        progress_tx: Option<tokio::sync::mpsc::Sender<String>>,
+    ) -> Result<DownloadResult, TidalError> {
+        use std::io::{Read, Write};
+
+        let send = |msg: String| {
+            if let Some(ref tx) = progress_tx {
+                let _ = tx.blocking_send(msg);
+            }
+        };
+
+        send(format!(r#"{{"stage":"info","message":"Fetching track info..."}}"#));
+        let info = self.get_track_info(id)?;
+
+        let artist = info.artist_name.as_deref().unwrap_or("Unknown");
+        send(format!(
+            r#"{{"stage":"info","message":"Fetching stream URL for {} - {}..."}}"#,
+            artist.replace('"', "\\\""),
+            info.title.replace('"', "\\\"")
+        ));
+        let stream = self.get_stream_url(id, quality)?;
+        let ext = stream.extension();
+
+        let album = info.album_title.as_deref().unwrap_or("Unknown Album");
+        let track_no = info.track_number.unwrap_or(0);
+        let filename = format!("{} - {} - {:02} - {}.{}", artist, album, track_no, info.title, ext);
+        let safe_filename = filename.replace('/', "_").replace('\\', "_");
+        let dest_path = dest.join(&safe_filename);
+
+        if let Some(parent) = dest_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| TidalError(format!("Failed to create directory: {}", e)))?;
+        }
+
+        let resp = self
+            .client
+            .get(&stream.url)
+            .timeout(std::time::Duration::from_secs(300))
+            .send()
+            .map_err(|e| TidalError(format!("Download HTTP error: {}", e)))?;
+
+        if !resp.status().is_success() {
+            return Err(TidalError(format!(
+                "Download failed: HTTP {}",
+                resp.status()
+            )));
+        }
+
+        let total_bytes = resp.content_length();
+        let mut reader = resp;
+        let mut file = std::fs::File::create(&dest_path)
+            .map_err(|e| TidalError(format!("Failed to create file: {}", e)))?;
+
+        let mut downloaded: u64 = 0;
+        let mut last_percent: u64 = 101; // force first update
+        let mut buf = [0u8; 65536];
+
+        loop {
+            let n = reader
+                .read(&mut buf)
+                .map_err(|e| TidalError(format!("Read error: {}", e)))?;
+            if n == 0 {
+                break;
+            }
+            file.write_all(&buf[..n])
+                .map_err(|e| TidalError(format!("Write error: {}", e)))?;
+            downloaded += n as u64;
+
+            let percent = total_bytes
+                .map(|t| if t > 0 { (downloaded * 100) / t } else { 0 })
+                .unwrap_or(0);
+            if percent != last_percent {
+                last_percent = percent;
+                send(format!(
+                    r#"{{"stage":"downloading","bytes":{},"total":{},"percent":{}}}"#,
+                    downloaded,
+                    total_bytes.unwrap_or(0),
+                    percent
+                ));
+            }
+        }
+        drop(file);
+
+        send(format!(r#"{{"stage":"tagging","message":"Writing metadata..."}}"#));
+        if let Err(e) = self.tag_file(&dest_path, &info) {
+            eprintln!("Warning: failed to tag file: {}", e);
+        }
+
+        let result = DownloadResult {
+            path: dest_path.to_string_lossy().to_string(),
+            filename: safe_filename,
+            bytes: downloaded,
+            mime_type: stream.mime_type,
+        };
+
+        send(format!(
+            r#"{{"stage":"done","path":"{}","filename":"{}","bytes":{}}}"#,
+            result.path.replace('"', "\\\""),
+            result.filename.replace('"', "\\\""),
+            result.bytes
+        ));
+
+        Ok(result)
+    }
+
+    fn tag_file(
+        &self,
+        path: &std::path::Path,
+        info: &TidalTrackInfo,
+    ) -> Result<(), TidalError> {
+        use lofty::config::WriteOptions;
+        use lofty::picture::{MimeType, Picture, PictureType};
+        use lofty::prelude::*;
+        use lofty::probe::Probe;
+        use lofty::tag::{Tag, TagType};
+
+        let mut tagged_file = Probe::open(path)
+            .map_err(|e| TidalError(format!("Failed to open file for tagging: {}", e)))?
+            .read()
+            .map_err(|e| TidalError(format!("Failed to read file tags: {}", e)))?;
+
+        let tag = match tagged_file.primary_tag_mut() {
+            Some(t) => t,
+            None => {
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                let tag_type = match ext {
+                    "flac" => TagType::VorbisComments,
+                    "mp3" => TagType::Id3v2,
+                    "m4a" => TagType::Mp4Ilst,
+                    _ => TagType::Id3v2,
+                };
+                tagged_file.insert_tag(Tag::new(tag_type));
+                tagged_file.primary_tag_mut().unwrap()
+            }
+        };
+
+        tag.set_title(info.title.clone());
+        if let Some(ref artist) = info.artist_name {
+            tag.set_artist(artist.clone());
+        }
+        if let Some(ref album) = info.album_title {
+            tag.set_album(album.clone());
+        }
+        if let Some(num) = info.track_number {
+            tag.set_track(num as u32);
+        }
+
+        // Embed cover art
+        if let Some(ref cover_id) = info.cover_id {
+            let cover_url = Self::cover_url(cover_id, 1280);
+            if let Ok(cover_resp) = self
+                .client
+                .get(&cover_url)
+                .timeout(std::time::Duration::from_secs(15))
+                .send()
+            {
+                if cover_resp.status().is_success() {
+                    if let Ok(cover_bytes) = cover_resp.bytes() {
+                        let pic = Picture::unchecked(cover_bytes.to_vec())
+                            .pic_type(PictureType::CoverFront)
+                            .mime_type(MimeType::Jpeg)
+                            .build();
+                        tag.push_picture(pic);
+                    }
+                }
+            }
+        }
+
+        tag.save_to_path(path, WriteOptions::default())
+            .map_err(|e| TidalError(format!("Failed to write tags: {}", e)))?;
+
+        Ok(())
     }
 
     pub fn get_album(&self, id: &str) -> Result<TidalAlbumInfo, TidalError> {
@@ -380,6 +612,18 @@ impl TidalClient {
             &json["data"]
         };
         Ok(parse_artist(artist_data))
+    }
+
+    pub fn cover_url(cover_id: &str, size: u32) -> String {
+        let path = cover_id.replace('-', "/");
+        format!(
+            "https://resources.tidal.com/images/{}/{}x{}.jpg",
+            path, size, size
+        )
+    }
+
+    pub fn artist_picture_url(picture_id: &str, size: u32) -> String {
+        Self::cover_url(picture_id, size)
     }
 
     pub fn get_artist_albums(&self, id: &str) -> Result<Vec<TidalAlbumInfo>, TidalError> {

@@ -4,7 +4,7 @@ mod types;
 
 use axum::{
     http::{HeaderValue, Method, header},
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Redirect, Response},
     routing::get,
     Router,
 };
@@ -24,6 +24,10 @@ struct Args {
 
     #[arg(long, default_value = "127.0.0.1", env = "MUSICGATEWAY_BIND")]
     bind: String,
+
+    /// Do not open the web UI in the browser on startup
+    #[arg(long)]
+    silent: bool,
 }
 
 async fn serve_frontend(path: axum::extract::Path<String>) -> Response {
@@ -70,12 +74,17 @@ async fn main() {
     let app = Router::new()
         .route("/", get(api::identity))
         .route("/search/", get(api::search))
-        .route("/track/", get(api::track))
-        .route("/stream-url/", get(api::stream_url))
-        .route("/info/", get(api::info))
-        .route("/album/", get(api::album))
-        .route("/artist/", get(api::artist))
-        .route("/ui", get(serve_ui_root))
+        .route("/tracks", get(api::tracks_search))
+        .route("/tracks/{id}", get(api::tracks_get))
+        .route("/tracks/{id}/stream-url", get(api::tracks_stream_url))
+        .route("/tracks/{id}/stream-data", get(api::tracks_stream_data))
+        .route("/tracks/{id}/download", get(api::tracks_download))
+        .route("/albums", get(api::albums_search))
+        .route("/albums/{id}", get(api::albums_get))
+        .route("/artists", get(api::artists_search))
+        .route("/artists/{id}", get(api::artists_get))
+        .route("/browse", get(api::browse_dirs))
+        .route("/ui", get(|| async { Redirect::permanent("/ui/") }))
         .route("/ui/", get(serve_ui_root))
         .route("/ui/{*path}", get(serve_frontend))
         .layer(cors);
@@ -88,6 +97,13 @@ async fn main() {
     );
     println!("  API: http://{}/", addr);
     println!("  UI:  http://{}/ui/", addr);
+
+    if !args.silent {
+        let ui_url = format!("http://{}/ui/", addr);
+        if let Err(e) = open::that(&ui_url) {
+            eprintln!("Failed to open browser: {}", e);
+        }
+    }
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

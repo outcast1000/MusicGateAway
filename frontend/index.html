@@ -4,19 +4,64 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MusicGateAway</title>
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="app">
     <header class="app-header">
-      <h1 class="app-title">MusicGateAway</h1>
+      <div class="app-logo">
+        <svg viewBox="0 0 32 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 34V13C4 6.4 9.4 2 16 2s12 4.4 12 11v21" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <rect x="10.5" y="16" width="2.5" height="11" rx="1.25" fill="currentColor"/>
+          <rect x="14.75" y="12" width="2.5" height="15" rx="1.25" fill="currentColor"/>
+          <rect x="19" y="18" width="2.5" height="9" rx="1.25" fill="currentColor"/>
+        </svg>
+        <span class="app-title">Music<strong>Gate</strong>Away</span>
+      </div>
       <div class="search-bar">
         <input type="text" id="searchInput" placeholder="Search tracks, albums, artists..." autofocus>
       </div>
+      <select id="searchType" class="format-select" title="Search type">
+        <option value="all">All</option>
+        <option value="tracks">Tracks</option>
+        <option value="albums">Albums</option>
+        <option value="artists">Artists</option>
+      </select>
+      <select id="formatSelect" class="format-select" title="Audio format">
+        <option value="LOSSLESS">FLAC (Lossless)</option>
+        <option value="HIGH">AAC (High)</option>
+      </select>
+      <div class="download-dest">
+        <input type="text" id="downloadDest" class="dest-input" placeholder="/tmp/mga-downloads" title="Download destination folder">
+        <button id="browseDest" class="btn btn-browse" title="Browse folders">&#128193;</button>
+      </div>
+      <button id="dlLogToggle" class="btn btn-log-toggle" title="Download log">&#8681;<span id="dlLogBadge" class="log-badge" style="display:none">0</span></button>
     </header>
     <main id="content" class="content">
-      <div class="empty-state">Type in the search bar to search TIDAL</div>
+      <div class="empty-state">
+        <svg viewBox="0 0 32 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:48px;height:54px;color:var(--text-tertiary);opacity:0.4">
+          <path d="M4 34V13C4 6.4 9.4 2 16 2s12 4.4 12 11v21" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <rect x="10.5" y="16" width="2.5" height="11" rx="1.25" fill="currentColor"/>
+          <rect x="14.75" y="12" width="2.5" height="15" rx="1.25" fill="currentColor"/>
+          <rect x="19" y="18" width="2.5" height="9" rx="1.25" fill="currentColor"/>
+        </svg>
+        Search TIDAL to get started
+      </div>
     </main>
+    <div id="playlistPanel" class="playlist-panel" style="display:none">
+      <div class="playlist-panel-header">
+        <h3>Queue</h3>
+        <div class="log-panel-actions">
+          <button id="plClear" class="btn btn-sel-action">Clear</button>
+          <button id="plClose" class="modal-close">&times;</button>
+        </div>
+      </div>
+      <div id="playlistList" class="playlist-list"></div>
+    </div>
     <footer id="nowPlaying" class="now-playing" style="display:none">
       <div class="now-playing-info">
         <img id="npArt" class="now-playing-art" src="" alt="">
@@ -35,7 +80,59 @@
         <input type="range" id="npSeek" class="np-seek" min="0" max="100" value="0">
         <span id="npDuration" class="np-duration">0:00</span>
       </div>
+      <button id="npPlaylist" class="np-btn np-btn-queue" title="Show queue">&#9776;</button>
     </footer>
+    <div id="downloadProgress" class="download-progress" style="display:none">
+      <div class="dl-info">
+        <span id="dlStep" class="dl-step"></span>
+        <span id="dlTrack" class="dl-track"></span>
+      </div>
+      <div class="dl-bar-container">
+        <div id="dlBar" class="dl-bar" style="width:0%"></div>
+      </div>
+      <span id="dlPercent" class="dl-percent">0%</span>
+      <span id="dlStage" class="dl-stage"></span>
+    </div>
+    <div id="selectionBar" class="selection-bar" style="display:none">
+      <button id="selAll" class="btn btn-sel-action">All</button>
+      <button id="selNone" class="btn btn-sel-action">None</button>
+      <span id="selCount" class="sel-count">0 selected</span>
+      <div class="sel-spacer"></div>
+      <button id="selPlay" class="btn btn-sel-action">&#9654; Play</button>
+      <button id="selEnqueue" class="btn btn-sel-action">+ Queue</button>
+      <button id="selDownload" class="btn btn-sel-action">&#8681; Download</button>
+    </div>
+  </div>
+  <div id="dlLogPanel" class="log-panel" style="display:none">
+    <div class="log-panel-header">
+      <h3>Download Log</h3>
+      <div class="log-panel-actions">
+        <button id="dlLogClear" class="btn btn-sel-action">Clear</button>
+        <button id="dlLogClose" class="modal-close">&times;</button>
+      </div>
+    </div>
+    <div id="dlLogList" class="log-list">
+      <div class="folder-empty">No downloads yet</div>
+    </div>
+  </div>
+  <div id="folderModal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Select download folder</h3>
+        <button id="folderModalClose" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-path">
+        <button id="folderUp" class="btn btn-browse" title="Parent folder">&#8593;</button>
+        <input type="text" id="folderPath" class="dest-input modal-path-input" readonly>
+      </div>
+      <div id="folderList" class="folder-list"></div>
+      <div class="modal-footer">
+        <button id="folderNewDir" class="btn btn-sel-action">+ New folder</button>
+        <div class="sel-spacer"></div>
+        <button id="folderCancel" class="btn btn-sel-action">Cancel</button>
+        <button id="folderSelect" class="btn btn-sel-action btn-primary">Select</button>
+      </div>
+    </div>
   </div>
   <audio id="audioEl" preload="auto"></audio>
   <script src="app.js"></script>
