@@ -2,7 +2,7 @@
 
 A lightweight TIDAL proxy server with a built-in web UI. Search, stream, and download music in lossless quality.
 
-**Website:** [musicgetaway.j-15.com](https://musicgetaway.j-15.com)
+**Website:** [musicgateaway.j-15.com](https://musicgateaway.j-15.com)
 
 ## Features
 
@@ -15,7 +15,7 @@ A lightweight TIDAL proxy server with a built-in web UI. Search, stream, and dow
 
 ## Install
 
-Download the latest release from the [website](https://musicgetaway.j-15.com) or [GitHub Releases](https://github.com/outcast1000/MusicGateAway/releases).
+Download the latest release from the [website](https://musicgateaway.j-15.com) or [GitHub Releases](https://github.com/outcast1000/MusicGateAway/releases).
 
 | Platform | Installer | Portable |
 |----------|-----------|----------|
