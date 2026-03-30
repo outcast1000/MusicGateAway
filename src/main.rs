@@ -105,6 +105,11 @@ async fn main() {
     println!("  API: http://{}/", addr);
     println!("  UI:  http://{}/ui/", addr);
 
+    #[cfg(windows)]
+    if args.silent {
+        unsafe { windows_sys::Win32::System::Console::FreeConsole(); }
+    }
+
     if !args.silent {
         let ui_url = format!("http://{}/ui/", addr);
         if let Err(e) = open::that(&ui_url) {
