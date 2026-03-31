@@ -192,6 +192,7 @@ pub struct DownloadParams {
     pub dest: String,
     pub quality: Option<String>,
     pub progress: Option<String>,
+    pub naming: Option<String>,
 }
 
 pub async fn tracks_download(
@@ -210,7 +211,8 @@ async fn tracks_download_json(id: String, params: DownloadParams) -> Response {
         let c = client();
         let quality = params.quality.as_deref().unwrap_or("LOSSLESS");
         let dest = std::path::Path::new(&params.dest);
-        c.download_track(&id, quality, dest, None)
+        let naming = params.naming.as_deref().unwrap_or("flat");
+        c.download_track(&id, quality, dest, naming, None)
             .map_err(|e| e.to_string())
     })
     .await;
@@ -240,7 +242,8 @@ fn tracks_download_sse(
         let c = client();
         let quality = params.quality.as_deref().unwrap_or("LOSSLESS");
         let dest = std::path::Path::new(&params.dest);
-        if let Err(e) = c.download_track(&id, quality, dest, Some(tx.clone())) {
+        let naming = params.naming.as_deref().unwrap_or("flat");
+        if let Err(e) = c.download_track(&id, quality, dest, naming, Some(tx.clone())) {
             let _ = tx.blocking_send(format!(
                 r#"{{"stage":"error","message":"{}"}}"#,
                 e.to_string().replace('"', "\\\"")

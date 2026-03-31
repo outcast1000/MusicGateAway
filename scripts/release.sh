@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CARGO_TOML="Cargo.toml"
+SERVER_TOML="server/Cargo.toml"
+TAURI_TOML="src-tauri/Cargo.toml"
+TAURI_CONF="src-tauri/tauri.conf.json"
 
 current_version() {
-  grep '^version' "$CARGO_TOML" | head -1 | sed 's/.*"\(.*\)".*/\1/'
+  grep '^version' "$TAURI_TOML" | head -1 | sed 's/.*"\(.*\)".*/\1/'
 }
 
 usage() {
@@ -53,20 +55,25 @@ echo "Version: $CURRENT -> $NEW_VERSION"
 echo "Tag:     $TAG"
 echo ""
 
-# Update Cargo.toml
+# Update version in all locations
+SED_CMD="s/^version = \"$CURRENT\"/version = \"$NEW_VERSION\"/"
 if [[ "$(uname)" == "Darwin" ]]; then
-  sed -i '' "s/^version = \"$CURRENT\"/version = \"$NEW_VERSION\"/" "$CARGO_TOML"
+  sed -i '' "$SED_CMD" "$SERVER_TOML"
+  sed -i '' "$SED_CMD" "$TAURI_TOML"
+  sed -i '' "s/\"version\": \"$CURRENT\"/\"version\": \"$NEW_VERSION\"/" "$TAURI_CONF"
 else
-  sed -i "s/^version = \"$CURRENT\"/version = \"$NEW_VERSION\"/" "$CARGO_TOML"
+  sed -i "$SED_CMD" "$SERVER_TOML"
+  sed -i "$SED_CMD" "$TAURI_TOML"
+  sed -i "s/\"version\": \"$CURRENT\"/\"version\": \"$NEW_VERSION\"/" "$TAURI_CONF"
 fi
 
 # Update Cargo.lock
 cargo generate-lockfile --quiet 2>/dev/null || cargo check --quiet 2>/dev/null || true
 
-echo "Updated $CARGO_TOML to $NEW_VERSION"
+echo "Updated $SERVER_TOML, $TAURI_TOML, and $TAURI_CONF to $NEW_VERSION"
 
 # Commit and tag
-git add "$CARGO_TOML" Cargo.lock
+git add "$SERVER_TOML" "$TAURI_TOML" "$TAURI_CONF" Cargo.lock
 git commit -m "release: v$NEW_VERSION"
 git tag -a "$TAG" -m "Release $TAG"
 

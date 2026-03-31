@@ -25,15 +25,15 @@
       <div class="search-bar">
         <input type="text" id="searchInput" placeholder="Search tracks, albums, artists..." autofocus>
       </div>
-      <select id="searchType" class="format-select" title="Search type">
-        <option value="all">All</option>
-        <option value="tracks">Tracks</option>
-        <option value="albums">Albums</option>
-        <option value="artists">Artists</option>
-      </select>
       <select id="formatSelect" class="format-select" title="Audio format">
         <option value="LOSSLESS">FLAC (Lossless)</option>
         <option value="HIGH">AAC (High)</option>
+      </select>
+      <select id="namingSelect" class="format-select" title="File naming format">
+        <option value="flat">Artist - Album - No - Title</option>
+        <option value="artist-album-dir">Artist - Album / No - Title</option>
+        <option value="nested-dirs">Artist / Album / No - Title</option>
+        <option value="artist-title">Artist - Title</option>
       </select>
       <div class="download-dest">
         <input type="text" id="downloadDest" class="dest-input" placeholder="/tmp/mga-downloads" title="Download destination folder">

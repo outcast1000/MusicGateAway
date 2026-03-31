@@ -1,6 +1,6 @@
-mod api;
-mod tidal;
-mod types;
+pub mod api;
+pub mod tidal;
+pub mod types;
 
 use axum::{
     http::{HeaderValue, Method, header},
@@ -8,27 +8,14 @@ use axum::{
     routing::get,
     Router,
 };
-use clap::Parser;
 use rust_embed::Embed;
+use std::sync::Arc;
+use tokio::sync::Notify;
 use tower_http::cors::CorsLayer;
 
 #[derive(Embed)]
-#[folder = "frontend/"]
+#[folder = "../frontend/"]
 struct Frontend;
-
-#[derive(Parser)]
-#[command(name = "MusicGateAway", version, about = "TIDAL proxy with web UI")]
-struct Args {
-    #[arg(long, default_value = "7171", env = "MUSICGATEWAY_PORT")]
-    port: u16,
-
-    #[arg(long, default_value = "127.0.0.1", env = "MUSICGATEWAY_BIND")]
-    bind: String,
-
-    /// Do not open the web UI in the browser on startup
-    #[arg(long)]
-    silent: bool,
-}
 
 async fn serve_frontend(path: axum::extract::Path<String>) -> Response {
     let path = path.0;
@@ -62,19 +49,15 @@ async fn serve_ui_root() -> Response {
     }
 }
 
-#[tokio::main]
-async fn main() {
-    let args = Args::parse();
-
+pub async fn start_server(port: u16, bind: &str, shutdown: Arc<Notify>) {
     let cors = CorsLayer::new()
         .allow_origin("*".parse::<HeaderValue>().unwrap())
         .allow_methods([Method::GET])
         .allow_headers([header::CONTENT_TYPE]);
 
-    let addr = format!("{}:{}", args.bind, args.port);
-    let shutdown = std::sync::Arc::new(tokio::sync::Notify::new());
+    let addr = format!("{}:{}", bind, port);
     let state = api::AppState {
-        base_url: std::sync::Arc::new(format!("http://{}", addr)),
+        base_url: Arc::new(format!("http://{}", addr)),
         shutdown: shutdown.clone(),
     };
 
@@ -97,6 +80,7 @@ async fn main() {
         .route("/ui/{*path}", get(serve_frontend))
         .layer(cors)
         .with_state(state);
+
     println!(
         "MusicGateAway v{} listening on http://{}",
         env!("CARGO_PKG_VERSION"),
@@ -105,19 +89,13 @@ async fn main() {
     println!("  API: http://{}/", addr);
     println!("  UI:  http://{}/ui/", addr);
 
-    #[cfg(windows)]
-    if args.silent {
-        unsafe { windows_sys::Win32::System::Console::FreeConsole(); }
-    }
-
-    if !args.silent {
-        let ui_url = format!("http://{}/ui/", addr);
-        if let Err(e) = open::that(&ui_url) {
-            eprintln!("Failed to open browser: {}", e);
+    let listener = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Failed to bind to {}: {}", addr, e);
+            return;
         }
-    }
-
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    };
     axum::serve(listener, app)
         .with_graceful_shutdown(async move { shutdown.notified().await })
         .await

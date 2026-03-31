@@ -383,6 +383,7 @@ impl TidalClient {
         id: &str,
         quality: &str,
         dest: &std::path::Path,
+        naming: &str,
         progress_tx: Option<tokio::sync::mpsc::Sender<String>>,
     ) -> Result<DownloadResult, TidalError> {
         use std::io::{Read, Write};
@@ -407,9 +408,21 @@ impl TidalClient {
 
         let album = info.album_title.as_deref().unwrap_or("Unknown Album");
         let track_no = info.track_number.unwrap_or(0);
-        let filename = format!("{} - {} - {:02} - {}.{}", artist, album, track_no, info.title, ext);
-        let safe_filename = filename.replace('/', "_").replace('\\', "_");
-        let dest_path = dest.join(&safe_filename);
+
+        let sanitize = |s: &str| -> String {
+            s.replace('/', "_").replace('\\', "_").replace(':', "_").replace('"', "_")
+        };
+        let s_artist = sanitize(artist);
+        let s_album = sanitize(album);
+        let s_title = sanitize(&info.title);
+
+        let relative_path = match naming {
+            "artist-album-dir" => format!("{} - {}/{:02} - {}.{}", s_artist, s_album, track_no, s_title, ext),
+            "nested-dirs" => format!("{}/{}/{:02} - {}.{}", s_artist, s_album, track_no, s_title, ext),
+            "artist-title" => format!("{} - {}.{}", s_artist, s_title, ext),
+            _ => format!("{} - {} - {:02} - {}.{}", s_artist, s_album, track_no, s_title, ext),
+        };
+        let dest_path = dest.join(&relative_path);
 
         if let Some(parent) = dest_path.parent() {
             std::fs::create_dir_all(parent)
@@ -472,7 +485,7 @@ impl TidalClient {
 
         let result = DownloadResult {
             path: dest_path.to_string_lossy().to_string(),
-            filename: safe_filename,
+            filename: relative_path,
             bytes: downloaded,
             mime_type: stream.mime_type,
         };

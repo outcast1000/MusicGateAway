@@ -16,7 +16,6 @@ const npTime = $("#npTime");
 const npDuration = $("#npDuration");
 
 const formatSelect = $("#formatSelect");
-const searchType = $("#searchType");
 
 let queue = [];
 let queueIndex = -1;
@@ -27,6 +26,14 @@ const savedFormat = localStorage.getItem("audioFormat");
 if (savedFormat) formatSelect.value = savedFormat;
 formatSelect.addEventListener("change", () => {
   localStorage.setItem("audioFormat", formatSelect.value);
+});
+
+// Naming format preference
+const namingSelect = $("#namingSelect");
+const savedNaming = localStorage.getItem("namingFormat");
+if (savedNaming) namingSelect.value = savedNaming;
+namingSelect.addEventListener("change", () => {
+  localStorage.setItem("namingFormat", namingSelect.value);
 });
 
 // Download destination
@@ -153,9 +160,17 @@ searchInput.addEventListener("keydown", (e) => {
   }
 });
 
+// Restore last search on load
+const lastSearch = localStorage.getItem("lastSearch");
+if (lastSearch) {
+  searchInput.value = lastSearch;
+  doSearch(lastSearch);
+}
+
 async function doSearch(query) {
   content.innerHTML = `<div class="loading-bar">Searching...</div>`;
   navStack = [];
+  localStorage.setItem("lastSearch", query);
   try {
     const res = await api(`/search/?s=${encodeURIComponent(query)}&limit=25&offset=0`);
     renderSearchResults(res);
@@ -165,50 +180,25 @@ async function doSearch(query) {
 }
 
 function renderSearchResults(res) {
-  const mode = searchType.value;
   const hasTracks = res.tracks && res.tracks.length > 0;
   const hasAlbums = res.albums && res.albums.length > 0;
   const hasArtists = res.artists && res.artists.length > 0;
 
-  if (mode === "tracks") {
-    if (!hasTracks) { content.innerHTML = `<div class="empty-state">No tracks found</div>`; return; }
-    let html = `<div class="section"><h3>Tracks</h3>${trackToolbar()}<div class="track-list">`;
-    for (const t of res.tracks) html += trackRow(t);
-    html += `</div></div>`;
-    content.innerHTML = html;
-    bindTrackActions();
-    return;
-  }
-
-  if (mode === "albums") {
-    if (!hasAlbums) { content.innerHTML = `<div class="empty-state">No albums found</div>`; return; }
-    let html = `<div class="section"><h3>Albums</h3><div class="card-grid">`;
-    for (const a of res.albums) html += albumCard(a);
-    html += `</div></div>`;
-    content.innerHTML = html;
-    return;
-  }
-
-  if (mode === "artists") {
-    if (!hasArtists) { content.innerHTML = `<div class="empty-state">No artists found</div>`; return; }
-    let html = `<div class="section"><h3>Artists</h3><div class="card-grid">`;
-    for (const a of res.artists) html += artistCard(a);
-    html += `</div></div>`;
-    content.innerHTML = html;
-    return;
-  }
-
-  // "all" mode
   if (!hasTracks && !hasAlbums && !hasArtists) {
     content.innerHTML = `<div class="empty-state">No results found</div>`;
     return;
   }
 
-  let html = `<div class="search-columns">`;
+  let html = "";
+
+  if (hasTracks) {
+    html += trackToolbar();
+  }
+
+  html += `<div class="search-columns">`;
 
   html += `<div class="search-col"><h3>Tracks</h3>`;
   if (hasTracks) {
-    html += trackToolbar();
     html += `<div class="track-list">`;
     for (const t of res.tracks) html += trackRow(t);
     html += `</div>`;
@@ -248,9 +238,9 @@ function trackToolbar() {
     <button class="btn btn-sel-action" data-tb-none>None</button>
     <span class="sel-count" data-tb-count>0 selected</span>
     <div class="sel-spacer"></div>
-    <button class="btn btn-sel-action" data-tb-play disabled>&#9654; Play Tracks</button>
+    <button class="btn btn-sel-action btn-primary" data-tb-play disabled>&#9654; Play</button>
     <button class="btn btn-sel-action" data-tb-enqueue disabled>+ Queue</button>
-    <button class="btn btn-sel-action" data-tb-download disabled>&#8681; Download Tracks</button>
+    <button class="btn btn-sel-action btn-primary" data-tb-download disabled>&#8681; Download</button>
   </div>`;
 }
 
@@ -260,7 +250,7 @@ function trackRow(t, showArt = true) {
     ? `<div class="track-art">${art ? `<img src="${art}" alt="">` : `<div class="art-placeholder"></div>`}</div>`
     : `<span class="track-num">${t.track_number || ""}</span>`;
   return `
-    <div class="track-row" data-id="${t.tidal_id}" data-track="${btoa(JSON.stringify(t))}">
+    <div class="track-row" data-id="${t.tidal_id}" data-track="${btoa(unescape(encodeURIComponent(JSON.stringify(t))))}">
       <input type="checkbox" class="track-check" data-check-id="${t.tidal_id}">
       ${artHtml}
       <div class="track-info">
@@ -327,7 +317,7 @@ content.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-action]");
   if (btn) {
     const row = btn.closest(".track-row");
-    const track = JSON.parse(atob(row.dataset.track));
+    const track = JSON.parse(decodeURIComponent(escape(atob(row.dataset.track))));
     if (btn.dataset.action === "play") playTrack(track);
     else if (btn.dataset.action === "enqueue") enqueueTrack(track);
     else if (btn.dataset.action === "download") downloadTrack(track);
@@ -341,7 +331,7 @@ content.addEventListener("click", (e) => {
   const playAlbumBtn = e.target.closest("[data-action-play-album]");
   if (playAlbumBtn) {
     const checked = getCheckedTracks();
-    const tracks = checked.length > 0 ? checked : Array.from(content.querySelectorAll(".track-row")).map(r => JSON.parse(atob(r.dataset.track)));
+    const tracks = checked.length > 0 ? checked : Array.from(content.querySelectorAll(".track-row")).map(r => JSON.parse(decodeURIComponent(escape(atob(r.dataset.track)))));
     if (tracks.length > 0) {
       queue = tracks;
       queueIndex = 0;
@@ -355,7 +345,7 @@ content.addEventListener("click", (e) => {
   const dlAlbumBtn = e.target.closest("[data-action-dl-album]");
   if (dlAlbumBtn) {
     const checked = getCheckedTracks();
-    const tracks = checked.length > 0 ? checked : Array.from(content.querySelectorAll(".track-row")).map(r => JSON.parse(atob(r.dataset.track)));
+    const tracks = checked.length > 0 ? checked : Array.from(content.querySelectorAll(".track-row")).map(r => JSON.parse(decodeURIComponent(escape(atob(r.dataset.track)))));
     if (tracks.length === 0) return;
     dlAlbumBtn.disabled = true;
     dlAlbumBtn.textContent = "Downloading...";
@@ -463,7 +453,7 @@ function renderArtistDetail(artist) {
 function getCheckedTracks() {
   return Array.from(content.querySelectorAll(".track-check:checked")).map(cb => {
     const row = cb.closest(".track-row");
-    return JSON.parse(atob(row.dataset.track));
+    return JSON.parse(decodeURIComponent(escape(atob(row.dataset.track))));
   });
 }
 
@@ -720,7 +710,8 @@ const dlStage = $("#dlStage");
 function downloadTrackWithProgress(track, step, total) {
   return new Promise((resolve, reject) => {
     const dest = downloadDestInput.value.trim() || "/tmp/mga-downloads";
-    const url = `/tracks/${track.tidal_id}/download?dest=${encodeURIComponent(dest)}&quality=${getQuality()}&progress=true`;
+    const naming = document.getElementById("namingSelect").value;
+    const url = `/tracks/${track.tidal_id}/download?dest=${encodeURIComponent(dest)}&quality=${getQuality()}&naming=${naming}&progress=true`;
 
     dlProgress.style.display = "flex";
     dlStep.textContent = total > 1 ? `${step}/${total}` : "";
