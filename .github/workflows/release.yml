@@ -63,7 +63,7 @@ jobs:
             | **Windows** | `-setup.exe` |
 
             Run `--silent` for headless server mode (API only, no window).
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           tauriScript: cargo tauri
           args: ${{ matrix.args }}

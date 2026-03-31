@@ -75,6 +75,7 @@ pub async fn start_server(port: u16, bind: &str, shutdown: Arc<Notify>) {
         .route("/artists", get(api::artists_search))
         .route("/artists/{id}", get(api::artists_get))
         .route("/browse", get(api::browse_dirs))
+        .route("/open-folder", get(api::open_folder))
         .route("/ui", get(|| async { Redirect::permanent("/ui/") }))
         .route("/ui/", get(serve_ui_root))
         .route("/ui/{*path}", get(serve_frontend))

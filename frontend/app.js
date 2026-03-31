@@ -39,7 +39,16 @@ namingSelect.addEventListener("change", () => {
 // Download destination
 const downloadDestInput = $("#downloadDest");
 const savedDest = localStorage.getItem("downloadDest");
-if (savedDest) downloadDestInput.value = savedDest;
+if (savedDest) {
+  downloadDestInput.value = savedDest;
+} else {
+  // Default to user home directory via browse endpoint
+  fetch("/browse").then(r => r.json()).then(res => {
+    if (res.current && !downloadDestInput.value) {
+      downloadDestInput.value = res.current;
+    }
+  }).catch(() => {});
+}
 downloadDestInput.addEventListener("change", () => {
   localStorage.setItem("downloadDest", downloadDestInput.value.trim());
 });
@@ -670,21 +679,41 @@ function renderLog() {
     dlLogList.innerHTML = `<div class="folder-empty">No downloads yet</div>`;
     return;
   }
-  dlLogList.innerHTML = downloadLog.map(e => {
+  dlLogList.innerHTML = downloadLog.map((e, i) => {
     const icon = e.ok ? `<span class="log-entry-icon ok">&#10003;</span>` : `<span class="log-entry-icon err">&#10007;</span>`;
     const detail = e.ok
       ? `<span>${formatBytes(e.bytes)}</span> &mdash; ${esc(e.path)}`
       : esc(e.error);
+    const actions = e.ok
+      ? `<div class="log-entry-actions">
+          <button class="log-btn" data-action="play" data-index="${i}" title="Play">&#9654;</button>
+          <button class="log-btn" data-action="folder" data-index="${i}" title="Open Folder">&#128193;</button>
+        </div>`
+      : "";
     return `<div class="log-entry">
       ${icon}
       <div class="log-entry-body">
         <div class="log-entry-name">${esc(e.filename)}</div>
         <div class="log-entry-detail">${detail}</div>
       </div>
+      ${actions}
       <span class="log-entry-time">${e.time}</span>
     </div>`;
   }).join("");
 }
+
+dlLogList.addEventListener("click", (e) => {
+  const btn = e.target.closest(".log-btn");
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.index, 10);
+  const entry = downloadLog[idx];
+  if (!entry || !entry.ok) return;
+  if (btn.dataset.action === "play" && entry.track) {
+    playTrack(entry.track);
+  } else if (btn.dataset.action === "folder" && entry.path) {
+    fetch(`/open-folder?path=${encodeURIComponent(entry.path)}`).catch(() => {});
+  }
+});
 
 dlLogToggle.addEventListener("click", () => {
   dlLogPanel.style.display = dlLogPanel.style.display === "none" ? "flex" : "none";
@@ -707,11 +736,12 @@ const dlBar = $("#dlBar");
 const dlPercent = $("#dlPercent");
 const dlStage = $("#dlStage");
 
-function downloadTrackWithProgress(track, step, total) {
+function downloadTrackWithProgress(track, step, total, overwrite = false) {
   return new Promise((resolve, reject) => {
-    const dest = downloadDestInput.value.trim() || "/tmp/mga-downloads";
+    const dest = downloadDestInput.value.trim() || "~";
     const naming = document.getElementById("namingSelect").value;
-    const url = `/tracks/${track.tidal_id}/download?dest=${encodeURIComponent(dest)}&quality=${getQuality()}&naming=${naming}&progress=true`;
+    let url = `/tracks/${track.tidal_id}/download?dest=${encodeURIComponent(dest)}&quality=${getQuality()}&naming=${naming}&progress=true`;
+    if (overwrite) url += "&overwrite=true";
 
     dlProgress.style.display = "flex";
     dlStep.textContent = total > 1 ? `${step}/${total}` : "";
@@ -721,6 +751,7 @@ function downloadTrackWithProgress(track, step, total) {
     dlStage.textContent = "";
 
     const es = new EventSource(url);
+    let finished = false;
 
     es.onmessage = (e) => {
       const data = JSON.parse(e.data);
@@ -735,6 +766,7 @@ function downloadTrackWithProgress(track, step, total) {
       } else if (data.stage === "info") {
         dlStage.textContent = data.message || "";
       } else if (data.stage === "done") {
+        finished = true;
         es.close();
         const now = new Date();
         addLogEntry({
@@ -742,11 +774,23 @@ function downloadTrackWithProgress(track, step, total) {
           filename: data.filename,
           path: data.path,
           bytes: data.bytes,
+          track: track,
           time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         });
         resolve(data);
       } else if (data.stage === "error") {
+        finished = true;
         es.close();
+        if (data.message && data.message.startsWith("file_exists:")) {
+          const filename = data.message.substring("file_exists:".length);
+          dlProgress.style.display = "none";
+          if (confirm(`"${filename}" already exists. Overwrite?`)) {
+            resolve(downloadTrackWithProgress(track, step, total, true));
+          } else {
+            resolve(null);
+          }
+          return;
+        }
         const now = new Date();
         addLogEntry({
           ok: false,
@@ -761,6 +805,8 @@ function downloadTrackWithProgress(track, step, total) {
     };
 
     es.onerror = () => {
+      if (finished) return;
+      finished = true;
       es.close();
       const now = new Date();
       addLogEntry({

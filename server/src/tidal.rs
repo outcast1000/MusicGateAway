@@ -384,6 +384,7 @@ impl TidalClient {
         quality: &str,
         dest: &std::path::Path,
         naming: &str,
+        overwrite: bool,
         progress_tx: Option<tokio::sync::mpsc::Sender<String>>,
     ) -> Result<DownloadResult, TidalError> {
         use std::io::{Read, Write};
@@ -423,6 +424,10 @@ impl TidalClient {
             _ => format!("{} - {} - {:02} - {}.{}", s_artist, s_album, track_no, s_title, ext),
         };
         let dest_path = dest.join(&relative_path);
+
+        if !overwrite && dest_path.exists() {
+            return Err(TidalError(format!("file_exists:{}", relative_path)));
+        }
 
         if let Some(parent) = dest_path.parent() {
             std::fs::create_dir_all(parent)

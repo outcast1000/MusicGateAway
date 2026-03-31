@@ -193,6 +193,7 @@ pub struct DownloadParams {
     pub quality: Option<String>,
     pub progress: Option<String>,
     pub naming: Option<String>,
+    pub overwrite: Option<String>,
 }
 
 pub async fn tracks_download(
@@ -212,7 +213,8 @@ async fn tracks_download_json(id: String, params: DownloadParams) -> Response {
         let quality = params.quality.as_deref().unwrap_or("LOSSLESS");
         let dest = std::path::Path::new(&params.dest);
         let naming = params.naming.as_deref().unwrap_or("flat");
-        c.download_track(&id, quality, dest, naming, None)
+        let overwrite = params.overwrite.as_deref() == Some("true");
+        c.download_track(&id, quality, dest, naming, overwrite, None)
             .map_err(|e| e.to_string())
     })
     .await;
@@ -243,7 +245,8 @@ fn tracks_download_sse(
         let quality = params.quality.as_deref().unwrap_or("LOSSLESS");
         let dest = std::path::Path::new(&params.dest);
         let naming = params.naming.as_deref().unwrap_or("flat");
-        if let Err(e) = c.download_track(&id, quality, dest, naming, Some(tx.clone())) {
+        let overwrite = params.overwrite.as_deref() == Some("true");
+        if let Err(e) = c.download_track(&id, quality, dest, naming, overwrite, Some(tx.clone())) {
             let _ = tx.blocking_send(format!(
                 r#"{{"stage":"error","message":"{}"}}"#,
                 e.to_string().replace('"', "\\\"")
@@ -308,6 +311,39 @@ pub async fn browse_dirs(
         parent,
         dirs,
     }))
+}
+
+// --- Open folder ---
+
+#[derive(Deserialize)]
+pub struct OpenFolderParams {
+    pub path: String,
+}
+
+pub async fn open_folder(
+    Query(params): Query<OpenFolderParams>,
+) -> Result<Json<serde_json::Value>, String> {
+    let file_path = std::path::Path::new(&params.path);
+    let folder = if file_path.is_dir() {
+        file_path.to_path_buf()
+    } else {
+        file_path.parent().map(|p| p.to_path_buf()).ok_or("Invalid path")?
+    };
+
+    if !folder.is_dir() {
+        return Err(format!("Directory not found: {}", folder.display()));
+    }
+
+    #[cfg(target_os = "macos")]
+    let cmd = std::process::Command::new("open").arg(&folder).spawn();
+    #[cfg(target_os = "windows")]
+    let cmd = std::process::Command::new("explorer").arg(&folder).spawn();
+    #[cfg(target_os = "linux")]
+    let cmd = std::process::Command::new("xdg-open").arg(&folder).spawn();
+
+    cmd.map_err(|e| format!("Failed to open folder: {}", e))?;
+
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 // --- Albums ---
