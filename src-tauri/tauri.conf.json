@@ -5,8 +5,7 @@
   "build": {
     "beforeBuildCommand": "",
     "beforeDevCommand": "",
-    "frontendDist": "../frontend",
-    "devUrl": "http://localhost:7171/ui/"
+    "frontendDist": "../frontend"
   },
   "app": {
     "security": {
