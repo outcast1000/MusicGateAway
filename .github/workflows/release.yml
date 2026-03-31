@@ -20,10 +20,13 @@ jobs:
         include:
           - platform: macos-latest
             args: '--target aarch64-apple-darwin'
+            rust_targets: 'aarch64-apple-darwin'
           - platform: macos-latest
             args: '--target x86_64-apple-darwin'
+            rust_targets: 'x86_64-apple-darwin'
           - platform: windows-latest
             args: ''
+            rust_targets: ''
 
     runs-on: ${{ matrix.platform }}
 
@@ -33,20 +36,31 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.rust_targets }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v__VERSION__
           releaseName: 'MusicGateAway v__VERSION__'
-          releaseBody: 'See the assets to download and install.'
+          releaseBody: |
+            ## Install
+
+            | Platform | Download |
+            |----------|----------|
+            | **macOS (Apple Silicon)** | `.dmg` |
+            | **macOS (Intel)** | `.dmg` |
+            | **Windows** | `-setup.exe` |
+
+            Run `--silent` for headless server mode (API only, no window).
           releaseDraft: true
           prerelease: false
+          tauriScript: cargo tauri
           args: ${{ matrix.args }}
