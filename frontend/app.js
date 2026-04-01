@@ -908,3 +908,84 @@ audio.addEventListener("ended", () => {
     npPlayPause.innerHTML = "&#9654;";
   }
 });
+
+// --- Update checker ---
+
+const GITHUB_REPO = "outcast1000/MusicGateAway";
+const updateModal = $("#updateModal");
+const updateModalClose = $("#updateModalClose");
+const updateCancel = $("#updateCancel");
+const updateDownload = $("#updateDownload");
+
+function compareVersions(a, b) {
+  const pa = a.replace(/^v/, "").split(".").map(Number);
+  const pb = b.replace(/^v/, "").split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+  }
+  return 0;
+}
+
+function markdownToHtml(md) {
+  return md
+    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/^\- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*<\/li>)/s, "<ul>$1</ul>")
+    .replace(/\n{2,}/g, "</p><p>")
+    .replace(/^(?!<[hulo])(.+)$/gm, "<p>$1</p>")
+    .replace(/<p><\/p>/g, "");
+}
+
+async function checkForUpdates() {
+  try {
+    const [identity, release] = await Promise.all([
+      api("/"),
+      fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      }),
+    ]);
+
+    const current = identity.version;
+    const latest = release.tag_name.replace(/^v/, "");
+
+    if (compareVersions(current, latest) >= 0) return;
+
+    // Dismissed this version before
+    if (localStorage.getItem("updateDismissed") === release.tag_name) return;
+
+    const date = new Date(release.published_at).toLocaleDateString("en-US", {
+      year: "numeric", month: "short", day: "numeric",
+    });
+
+    $("#updateFrom").textContent = "v" + current;
+    $("#updateTo").textContent = release.tag_name;
+    $("#updateDate").textContent = date;
+    $("#updateChanges").innerHTML = markdownToHtml(release.body || "No release notes.");
+    updateDownload.href = release.html_url;
+    updateModal.style.display = "flex";
+
+    updateModal._tag = release.tag_name;
+  } catch (e) {
+    console.error("Update check failed:", e);
+  }
+}
+
+function dismissUpdate() {
+  if (updateModal._tag) {
+    localStorage.setItem("updateDismissed", updateModal._tag);
+  }
+  updateModal.style.display = "none";
+}
+
+updateModalClose.addEventListener("click", dismissUpdate);
+updateCancel.addEventListener("click", dismissUpdate);
+updateModal.addEventListener("click", (e) => {
+  if (e.target === updateModal) dismissUpdate();
+});
+
+checkForUpdates();

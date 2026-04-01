@@ -1287,6 +1287,88 @@ body::before {
   to { transform: translateY(0); opacity: 1; }
 }
 
+/* ===== Update Modal ===== */
+.update-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  max-height: 50vh;
+}
+
+.update-version {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.update-ver-tag {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+
+.update-ver-new {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.update-arrow {
+  color: var(--text-tertiary);
+  font-size: 16px;
+}
+
+.update-date {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.update-changes {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.update-changes h2,
+.update-changes h3 {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 12px 0 6px;
+}
+
+.update-changes h2:first-child,
+.update-changes h3:first-child {
+  margin-top: 0;
+}
+
+.update-changes ul, .update-changes ol {
+  padding-left: 20px;
+  margin: 4px 0;
+}
+
+.update-changes li {
+  margin: 2px 0;
+}
+
+.update-changes p {
+  margin: 6px 0;
+}
+
+.update-changes code {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 12px;
+  background: var(--bg-hover);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
 /* ===== Animations ===== */
 @keyframes fadeIn {
   from { opacity: 0; }
