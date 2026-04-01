@@ -1,6 +1,6 @@
 {
   "productName": "MusicGateAway",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "identifier": "com.musicgateaway.app",
   "build": {
     "beforeBuildCommand": "",
