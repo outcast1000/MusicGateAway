@@ -497,12 +497,12 @@
 
     function classifyAsset(name) {
       const n = name.toLowerCase();
-      if (n.includes('macos') || n.includes('darwin')) {
+      if (n.endsWith('.dmg') || n.endsWith('.pkg') || n.includes('macos') || n.includes('darwin')) {
         if (n.includes('aarch64') || n.includes('arm64')) return { os: 'mac', arch: 'Apple Silicon' };
-        if (n.includes('x86_64') || n.includes('intel')) return { os: 'mac', arch: 'Intel' };
+        if (n.includes('x64') || n.includes('x86_64') || n.includes('intel')) return { os: 'mac', arch: 'Intel' };
         return { os: 'mac', arch: '' };
       }
-      if (n.includes('windows') || n.includes('win')) {
+      if (n.endsWith('.exe') || n.endsWith('.msi') || n.includes('windows') || n.includes('win')) {
         return { os: 'win', arch: 'x86_64' };
       }
       return null;
